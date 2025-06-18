@@ -1,0 +1,16 @@
+F19/
+S20/
+Timescales/
+Data/
+F19/data/
+**/DataFiles20190731/
+**/DataFiles2/
+**/DataFiles20190725/
+**/DataFiles20190726
+**/DataFiles_Archive20191218/
+**/__pycache__/
+*.pyc
+**/.ipynb_checkpoints/
+*.pdf
+*.png
+.DS_Store
