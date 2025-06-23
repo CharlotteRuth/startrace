@@ -7,6 +7,6 @@ setup(name='halo_trace',
       author='Elaad Applebaum',
       author_email='elaad.applebaum@gmail.com',
       license='MIT',
-      python_requires='>=3',
+      python_requires='>=3', 
       packages=['halo_trace'],
-      zip_safe=False) # type: ignore
+      zip_safe=False)

@@ -22,10 +22,10 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
     if sim is not false, pass the pynbody simulation to check for too-high grp values
         This is important to prevent the matrices from getting too big
     """
-    
+    print('\tMatching halos by merit function')
     # max_ind is the maximum halo number considered in the match
-    
     max_ind = int(max(sim1_grp_list) * 1.5)
+    print(max_ind)
     if max_ind > 5000:
         if not sim:
             raise ValueError('You must provide a pynbody snapshot for argument "sim" when using such large grp values')
@@ -33,9 +33,11 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
         pth = Path(sim.filename)
         if ahf_dir is not None:
             ahf_abspath = list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))
+            print(ahf_abspath)
             stat_abspath = list(pth.parent.glob(f'{ahf_dir}/*stat'))
         else:
             ahf_abspath = glob.glob(sim.filename + '*z*AHF_halos')
+            print(ahf_abspath)
             stat_abspath = glob.glob(sim.filename + '*amiga.stat')
         if len(ahf_abspath) > 0:
             nmax = int(subprocess.check_output(['wc', '-l', ahf_abspath[0]]).split()[0]) - 1
@@ -48,9 +50,24 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
     if max_ind < 100:
         max_ind = 100
     mat = bridge_1_to_2.catalog_transfer_matrix(max_index=max_ind, use_family=pb.family.dm, groups_1=groups_1, groups_2=groups_2)
+    # mat = bridge_1_to_2.count_particles_in_common(groups_1, groups_2, max_num_halos=max_ind, use_family=pb.family.dm)
+    print(mat)
     Ni = np.sum(mat, axis=1) #number of particles in grp of sim 1
+    print('\tNi=',Ni)
     Nj = np.sum(mat, axis=0) #number of particles in grp of sim 2
+    print('\tNj=',Nj)
 
+    # Check for zeros to prevent division by zero
+    if np.any(Ni == 0) or np.any(Nj == 0):
+        print('\tWarning: Some halos have zero particles - this may indicate corrupted data')
+        print(f'\tZeros in Ni: {np.sum(Ni == 0)}, Zeros in Nj: {np.sum(Nj == 0)}')
+    
+
+    eps = 1e-10
+    Ni_safe = np.where(Ni == 0, eps, Ni)
+    Nj_safe = np.where(Nj == 0, eps, Nj)
+    
+    merit_f = mat**2/np.outer(Ni_safe, Nj_safe)
     #find merit function in both directions -- need to think if this is necessary. Each direction is transpose
     # of the other direction.
     merit_f = mat**2/np.outer(Ni, Nj)
@@ -101,17 +118,22 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
     """
     
     all_steplist = paths.list_steps(sim_base)
+    #print(all_steplist)
     if steplist is None:
         steplist = all_steplist
     else:
         #for substep in steplist (e.g. [71, 96, 4096]), iterate through step in all_steplist to check if
         #substep is in step
         steplist = [step for step in all_steplist for substep in steplist if str(substep).rjust(6, '0') in step]
-
+		
     if ahf_dir is not None:
         temp_steplist = []
+        print(len(steplist))
         for step in steplist:
+            # print('step',step)
             for subdir in Path(step).parent.iterdir():
+                # print('\tsubdirr',subdir)
+                # print('\t\tsubdir',str(subdir)[-len(ahf_dir):])
                 if str(subdir)[-len(ahf_dir):] == ahf_dir:
                     # checking if the ahf_dir contains the AHF catalogs
                     if sum([str(subpath).endswith('AHF_halos') for subpath in subdir.iterdir()]) >= 1:
@@ -168,12 +190,17 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         print('Must trace through at least 3 steps to use cross check')
         return
     
+    print('simlow=',steplist[0])
     sim_low = pb.load(steplist[0])
+    print('simlow=',sim_low)
     if ahf_dir is not None:
         pth = Path(sim_low.filename)
+        print('pth=',pth)
         ahf_basename = str(list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))[0])[:-5]
-        groups_1 = sim_low.halos(halo_numbers='v1', ahf_basename=ahf_basename)
+        print('185ahfbasename=',ahf_basename)
+        groups_1 = sim_low.halos(halo_numbers='v1', filename=ahf_basename)
     else:
+        print('no ahf seen???')
         groups_1 = None
 
     for i, step in enumerate(steplist[1:]):
@@ -183,17 +210,21 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
             grplist2 = grplist
             
         sim_high = pb.load(step)
+        print('simhigh=',sim_high)
         b = pb.bridge.OrderBridge(sim_low, sim_high)
+        #b = sim_low.bridge(sim_high)
 
         if i%2 == 0 and cross_check and i+2 < len(steplist):
             print('Advanced step ' + steplist[i+2][-6:])
             sim_high2 = pb.load(steplist[i+2])
             b2 = pb.bridge.OrderBridge(sim_low, sim_high2)
+            #b2 = sim_low.bridge(sim_high2)
         try:
             if ahf_dir is not None:
                 pth = Path(sim_high.filename)
-                ahf_basename = str(list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))[0])[:-5]
-                groups_2 = sim_high.halos(ahf_basename=ahf_basename, halo_numbers='v1')
+                ahf_basename = str(list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))[0])#[:-5]
+                print('ahf_basename=',ahf_basename)
+                groups_2 = sim_high.halos(halo_numbers='v1', filename=ahf_basename)
             else:
                 groups_2 = None
             grplist = match_by_merit(b, grplist, sim_high, ahf_dir=ahf_dir, groups_1=groups_1, groups_2=groups_2)
@@ -217,7 +248,7 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
                 if ahf_dir is not None:
                     pth = Path(sim_high2.filename)
                     ahf_basename = str(list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))[0])[:-5]
-                    groups_2_2 = sim_high2.halos(ahf_basename=ahf_basename, halo_numbers='v1')
+                    groups_2_2 = sim_high2.halos(filename=ahf_basename, halo_numbers='v1')
                 else:
                     groups_2_2 = None
                 grplist2 = match_by_merit(b2, grplist2, sim_high2, ahf_dir=ahf_dir, groups_1=groups_1, groups_2=groups_2_2)
@@ -360,4 +391,157 @@ def trace_quantity(sim_base, trace_df=None, quantity='Mvir(M_sol)', ahf_quantity
         quantity_dfs[i].index = quantity_dfs[i].index.rename('Grp')
     return [df.astype(float, errors='ignore') for df in quantity_dfs]
 
+
+
+def test_halo_catalogs(sim_base, ahf_dir=None, **kwargs):
+    """Test all snapshots to see which ones have working halo catalogs
     
+    Will attempt to load halo catalogs for each timestep and report which ones fail.
+    Returns a list of working steps that can be used with trace_halos.
+    
+    sim_base - the base directory of the simulation you wish to test
+    ahf_dir(default None) - if not None, an extra (relative) path to append for the AHF catalogs
+    
+    Returns:
+    working_steps - list of steps that successfully loaded halo catalogs
+    """
+    
+    all_steplist = paths.list_steps(sim_base)
+    print(f"Testing {len(all_steplist)} snapshots for working halo catalogs...")
+    
+    # First filter by ahf_dir if specified (same logic as trace_halos)
+    if ahf_dir is not None:
+        temp_steplist = []
+        for step in all_steplist:
+            step_path = Path(step)
+            ahf_path = step_path.parent / ahf_dir
+            
+            if ahf_path.exists() and ahf_path.is_dir():
+                # Check if this directory contains AHF_halos files
+                ahf_files = list(ahf_path.glob('*AHF_halos*'))
+                if len(ahf_files) >= 1:
+                    temp_steplist.append(step)
+                else:
+                    print(f"Skipping {step} - no valid AHF files found")
+            else:
+                print(f"Skipping {step} - no valid AHF directory found")
+
+        print(f"Found {len(temp_steplist)} steps with ahf_dir containing AHF catalogs")
+        steplist = temp_steplist
+    else:
+        steplist = all_steplist
+    
+    working_steps = []
+    failed_steps = []
+    
+    for i, step in enumerate(steplist):
+        step_name = step[-6:]  # Get the 6-digit step number
+        print(f"Testing step {step_name} ({i+1}/{len(steplist)})... ", end="")
+        
+        try:
+            # Load the simulation
+            sim = pb.load(step)
+            
+            # Try to load the halo catalog
+            if ahf_dir is not None:
+                pth = Path(sim.filename)
+                
+                # Find AHF files
+                ahf_files = list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))
+                if len(ahf_files) == 0:
+                    print(f"FAILED - No AHF_halos files found in {pth.parent / ahf_dir}")
+                    failed_steps.append((step, "No AHF files found"))
+                    continue
+                
+                # Try different ahf_basename constructions
+                ahf_full_path = str(ahf_files[0])
+                
+                # Method 1: Remove .AHF_halos extension
+                ahf_basename1 = ahf_full_path.replace('halos', '')
+                
+                # Method 2: Remove last 10 characters (.AHF_halos)
+                ahf_basename2 = ahf_full_path[:-10]
+                
+                # Method 3: Just the filename without directory
+                ahf_basename3 = ahf_full_path[:-9]
+
+                # Method 4: Use the full path as basename
+                ahf_basename4 = ahf_full_path
+
+                # test opening file first
+                try:
+                    with open(ahf_full_path, 'rb') as f:
+                        print(f"SUCCESS - AHF_halos file found: {ahf_full_path}")
+                except Exception as e:
+                    print(f"FAILED - Could not open AHF_halos file: {str(e)}")
+                    failed_steps.append((step, f"File open error: {str(e)}"))
+                    continue
+                
+                success = False
+                for j, basename in enumerate([ahf_basename1, ahf_basename2, ahf_basename3, ahf_basename4]):
+                    try:
+                        groups = sim.halos(filename=basename, halo_numbers='v1')
+                        print(f"SUCCESS (method {j+1}: {basename})")
+                        working_steps.append(step)
+                        success = True
+                        break
+                    except Exception as e:
+                        continue
+                
+                if not success:
+                    print(f"FAILED - Could not load halos with any basename method")
+                    failed_steps.append((step, "Could not load halos"))
+                        
+            else:
+                # Try default halo loading (no ahf_dir specified)
+                try:
+                    groups = sim.halos()
+                    print("SUCCESS (default)")
+                    working_steps.append(step)
+                except Exception as e:
+                    print(f"FAILED - {str(e)}")
+                    failed_steps.append((step, str(e)))
+            
+            # Clean up
+            del sim
+            
+        except Exception as e:
+            print(f"FAILED - Could not load simulation: {str(e)}")
+            failed_steps.append((step, f"Simulation load error: {str(e)}"))
+    
+    print(f"\n=== SUMMARY ===")
+    print(f"Total snapshots tested: {len(steplist)}")
+    print(f"Working snapshots: {len(working_steps)}")
+    print(f"Failed snapshots: {len(failed_steps)}")
+    
+    if failed_steps:
+        print(f"\nFailed snapshots:")
+        for step, reason in failed_steps:
+            print(f"  {step[-6:]}: {reason}")
+    
+    print(f"\nWorking snapshots can be used with:")
+    print(f"steplist = {[step[-6:] for step in working_steps]}")
+    
+    return working_steps
+
+def trace_halos_filtered(sim_base, test_first=True, **kwargs):
+    """Wrapper around trace_halos that first tests all snapshots
+    
+    If test_first=True, will run test_halo_catalogs first and only use working snapshots.
+    Otherwise, behaves exactly like trace_halos.
+    """
+    
+    if test_first:
+        print("Testing snapshots first...")
+        working_steps = test_halo_catalogs(sim_base, **kwargs)
+        
+        if len(working_steps) == 0:
+            print("No working snapshots found!")
+            return None
+        
+        # Extract step numbers and pass to trace_halos
+        working_step_numbers = [int(step.split('.')[-1]) for step in working_steps]
+        kwargs['steplist'] = working_step_numbers
+        print(f"\nProceeding with {len(working_steps)} working snapshots...")
+    
+    return trace_halos(sim_base, **kwargs)
