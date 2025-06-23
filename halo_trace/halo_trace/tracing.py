@@ -62,15 +62,18 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
         print('\tWarning: Some halos have zero particles - this may indicate corrupted data')
         print(f'\tZeros in Ni: {np.sum(Ni == 0)}, Zeros in Nj: {np.sum(Nj == 0)}')
     
-
     eps = 1e-10
     Ni_safe = np.where(Ni == 0, eps, Ni)
     Nj_safe = np.where(Nj == 0, eps, Nj)
     
     merit_f = mat**2/np.outer(Ni_safe, Nj_safe)
+    # Set merit function to zero where either Ni or Nj was originally zero
+    zero_mask = np.outer(Ni == 0, np.ones_like(Nj, dtype=bool)) | np.outer(np.ones_like(Ni, dtype=bool), Nj == 0)
+    merit_f = np.where(zero_mask, 0.0, merit_f)
+    
     #find merit function in both directions -- need to think if this is necessary. Each direction is transpose
     # of the other direction.
-    merit_f = mat**2/np.outer(Ni, Nj)
+    # merit_f = mat**2/np.outer(Ni, Nj)
     merit_f_back = merit_f.transpose() #mat.transpose()**2/np.outer(Nj, Ni)
     merit_f_mask = np.ma.array(merit_f, mask=np.isnan(merit_f))
     merit_f_back_mask = merit_f_mask.transpose() #np.ma.array(merit_f_back, mask=np.isnan(merit_f_back))
@@ -243,6 +246,7 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         except(ValueError, IndexError) as err:
             print(err)
             print('Problem encountered, skipping step ' + step[-6:] + '\n')
+
         if i%2 == 0 and cross_check and i+2 < len(steplist):
             try:
                 if ahf_dir is not None:
@@ -545,3 +549,114 @@ def trace_halos_filtered(sim_base, test_first=True, **kwargs):
         print(f"\nProceeding with {len(working_steps)} working snapshots...")
     
     return trace_halos(sim_base, **kwargs)
+
+
+def test_halo_catalogs_comprehensive(sim_base, ahf_dir=None, **kwargs):
+    """Test all snapshots to see which ones have working simulation files AND halo catalogs
+    
+    This function tests both the simulation files and the halo catalogs to identify
+    any corrupted or empty files that would cause the tracing to fail.
+    
+    sim_base - the base directory of the simulation you wish to test
+    ahf_dir(default None) - if not None, an extra (relative) path to append for the AHF catalogs
+    
+    Returns:
+    working_steps - list of steps that successfully loaded both simulation and halo catalogs
+    """
+    
+    all_steplist = paths.list_steps(sim_base)
+    print(f"Testing {len(all_steplist)} snapshots for working simulation files AND halo catalogs...")
+    
+    # First filter by ahf_dir if specified (same logic as trace_halos)
+    if ahf_dir is not None:
+        temp_steplist = []
+        for step in all_steplist:
+            for subdir in Path(step).parent.iterdir():
+                if str(subdir)[-len(ahf_dir):] == ahf_dir:
+                    if sum([str(subpath).endswith('AHF_halos') for subpath in subdir.iterdir()]) >= 1:
+                        temp_steplist.append(step)
+        steplist = temp_steplist
+    else:
+        steplist = all_steplist
+    
+    working_steps = []
+    failed_steps = []
+    
+    for i, step in enumerate(steplist):
+        print(f"\n--- Testing snapshot {i+1}/{len(steplist)}: {step[-6:]} ---")
+        
+        # Test 1: Can we load the simulation file?
+        try:
+            print("1. Loading simulation file...")
+            sim = pb.load(step)
+            print(f"   SUCCESS - Loaded {sim}")
+            
+            # Test 2: Can we access basic particle data?
+            print("2. Testing particle data access...")
+            try:
+                n_particles = len(sim)
+                print(f"   SUCCESS - {n_particles} particles")
+                
+                # Test 3: Can we access the order array (this is where the error occurs)?
+                print("3. Testing particle order array...")
+                try:
+                    test_order = sim['iord'][:10]  # Just test first 10 particles
+                    print(f"   SUCCESS - Order array accessible")
+                    
+                    # Test 4: Can we load halo catalogs?
+                    print("4. Testing halo catalog loading...")
+                    if ahf_dir is not None:
+                        pth = Path(sim.filename)
+                        ahf_files = list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))
+                        
+                        if len(ahf_files) == 0:
+                            print("   FAILED - No AHF_halos files found")
+                            failed_steps.append((step, "No AHF files found"))
+                            continue
+                        
+                        # Try to load halos
+                        ahf_basename = str(ahf_files[0])[:-5]  # Remove '.AHF_'
+                        try:
+                            groups = sim.halos(halo_numbers='v1', filename=ahf_basename)
+                            print(f"   SUCCESS - Loaded {len(groups)} halo groups")
+                            working_steps.append(step)
+                            
+                        except Exception as e:
+                            print(f"   FAILED - Halo loading error: {str(e)}")
+                            failed_steps.append((step, f"Halo loading error: {str(e)}"))
+                    else:
+                        # Try default halo loading
+                        try:
+                            groups = sim.halos()
+                            print(f"   SUCCESS - Loaded {len(groups)} halo groups")
+                            working_steps.append(step)
+                        except Exception as e:
+                            print(f"   FAILED - Default halo loading error: {str(e)}")
+                            failed_steps.append((step, f"Default halo loading error: {str(e)}"))
+                            
+                except Exception as e:
+                    print(f"   FAILED - Order array error: {str(e)}")
+                    failed_steps.append((step, f"Order array error: {str(e)}"))
+                    
+            except Exception as e:
+                print(f"   FAILED - Particle data error: {str(e)}")
+                failed_steps.append((step, f"Particle data error: {str(e)}"))
+                
+        except Exception as e:
+            print(f"   FAILED - Simulation loading error: {str(e)}")
+            failed_steps.append((step, f"Simulation loading error: {str(e)}"))
+    
+    print(f"\n=== COMPREHENSIVE TEST SUMMARY ===")
+    print(f"Total snapshots tested: {len(steplist)}")
+    print(f"Working snapshots (both sim + halos): {len(working_steps)}")
+    print(f"Failed snapshots: {len(failed_steps)}")
+    
+    if failed_steps:
+        print(f"\nFailed snapshots and reasons:")
+        for step, reason in failed_steps:
+            print(f"  {step[-6:]}: {reason}")
+    
+    print(f"\nWorking snapshots can be used with:")
+    print(f"steplist = {[step[-6:] for step in working_steps]}")
+    
+    return working_steps
