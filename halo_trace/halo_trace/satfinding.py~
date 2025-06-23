@@ -1,0 +1,106 @@
+import pickle
+pickle.HIGHEST_PROTOCOL = 4 # For the file to be read by python 3.7, it needs a lower pickle protocol than the default 5
+
+from . import paths
+from . import amiga_ahf as amah
+
+import pynbody as pb
+import numpy as np
+import os
+import pandas as pd
+import glob
+import subprocess
+from pathlib import Path
+
+def satfinding(sim_base, mainhalo_z0=1, trace_file = None, steplist=None, maxstep=None, save_file=True,
+                min_ntot=500, ahf_dir=None, **kwargs):
+    """Identify all satellites of a halo
+    
+    Will find the lowest redshift available step, and will iterate through
+    higher steps. For each higher redshift step, finds the most probable parent halos
+    for the next lower redshift step
+    
+    sim_base - the base directory of the simulation you wish to match
+    
+    
+    steplist(default None) - the steps to include in the trace. If None, uses all available
+    
+    maxstep(default None) - the earliest time step to include. If None, uses all available
+    
+    save_file(default True) - if True or string, save the resulting dataframe with default name
+        or passed string. Will check for existence of file before overwrite
+    
+    min_ntot(default 500) - minimum number of particles in halos to track
+    
+
+    ahf_dir(default None) - if not None, an extra (relative) path to append for the AHF catalogs
+
+    
+    ***********
+
+    returns pandas DataFrame of matched halos, with -1 where matches were not found successfully
+    
+    """
+    
+    all_steplist = paths.list_steps(sim_base)
+    if steplist is None:
+        steplist = all_steplist
+    else:
+        #for substep in steplist (e.g. [71, 96, 4096]), iterate through step in all_steplist to check if
+        #substep is in step
+        steplist = [step for step in all_steplist for substep in steplist if str(substep).rjust(6, '0') in step]
+
+    if ahf_dir is not None:
+        temp_steplist = []
+        for step in steplist:
+            for subdir in Path(step).parent.iterdir():
+                if str(subdir)[-len(ahf_dir):] == ahf_dir:
+                    temp_steplist.append(step)
+
+        print('Using only the following steps which contain ahf_dir:')
+        print([step[-6:] for step in temp_steplist])
+        steplist = temp_steplist
+    
+    if save_file:
+        try:
+            l = len(save_file)
+        except TypeError:
+            save_file = steplist[0] + '.sats.hdf5'
+        if os.path.isfile(save_file):
+            print('File exists: ' + save_file)
+            print('Aborting')
+            return None
+        else:
+            print('File will be saved as ' + save_file)
+    
+    if maxstep is not None:
+        steplist = [step for step in steplist if int(step.split('.')[-1]) >= int(maxstep)]
+        print('Earliest step is ' + steplist[-1] + '\n')
+        
+    df = pd.DataFrame(columns=['Step', 'Sats'] )
+    if trace_file is None:
+        trace_file = steplist[0] + '.trace_back.hdf5'
+    trace = pd.read_hdf(trace_file)
+    
+    for i, step in enumerate(steplist):
+        print('Starting step ' + step[-6:])
+            
+        sim = pb.load(step)
+        if (i == 0):
+            mainhalo = mainhalo_z0
+        else:
+            mainhalo = trace.loc[mainhalo_z0][step[-6:]]
+
+        if (mainhalo == -1):
+            continue
+        amiga_df = amah.read_amiga(sim, nearest=mainhalo, ahf_dir=ahf_dir)
+        # ahf_df = amah.read_ahf(sim, ahf_dir=ahf_dir)
+
+        sats = np.array(amiga_df[(amiga_df['Nearest(Rvir)'] < 1) & (amiga_df['N_tot'] > min_ntot) & (amiga_df['N_star'] > 1)].index)
+        df = df.append({'Step': step[-6:], 'Sats': sats}, ignore_index = True)
+
+    df = df.set_index('Step')
+    if save_file:
+        df.to_hdf(save_file, key='ids')
+    
+    return df
