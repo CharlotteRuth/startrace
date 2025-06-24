@@ -12,6 +12,8 @@ import glob
 import subprocess
 from pathlib import Path
 
+import tqdm.notebook as tqdm
+
 def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups_1=None, groups_2=None):
     """Match most likely halo between snapshots
     
@@ -65,18 +67,18 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
         print('\tWarning: Some halos have zero particles - this may indicate corrupted data')
         print(f'\tZeros in Ni: {np.sum(Ni == 0)}, Zeros in Nj: {np.sum(Nj == 0)}')
     
-    eps = 1e-10
-    Ni_safe = np.where(Ni == 0, eps, Ni)
-    Nj_safe = np.where(Nj == 0, eps, Nj)
+    # eps = 1e-10
+    # Ni_safe = np.where(Ni == 0, eps, Ni)
+    # Nj_safe = np.where(Nj == 0, eps, Nj)
     
-    merit_f = mat**2/np.outer(Ni_safe, Nj_safe)
-    # Set merit function to zero where either Ni or Nj was originally zero
-    zero_mask = np.outer(Ni == 0, np.ones_like(Nj, dtype=bool)) | np.outer(np.ones_like(Ni, dtype=bool), Nj == 0)
-    merit_f = np.where(zero_mask, 0.0, merit_f)
+    # merit_f = mat**2/np.outer(Ni_safe, Nj_safe)
+    # # Set merit function to zero where either Ni or Nj was originally zero
+    # zero_mask = np.outer(Ni == 0, np.ones_like(Nj, dtype=bool)) | np.outer(np.ones_like(Ni, dtype=bool), Nj == 0)
+    # merit_f = np.where(zero_mask, 0.0, merit_f)
     
     #find merit function in both directions -- need to think if this is necessary. Each direction is transpose
     # of the other direction.
-    # merit_f = mat**2/np.outer(Ni, Nj)
+    merit_f = mat**2/np.outer(Ni, Nj)
     merit_f_back = merit_f.transpose() #mat.transpose()**2/np.outer(Nj, Ni)
     merit_f_mask = np.ma.array(merit_f, mask=np.isnan(merit_f))
     merit_f_back_mask = merit_f_mask.transpose() #np.ma.array(merit_f_back, mask=np.isnan(merit_f_back))
@@ -210,6 +212,7 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         print('no ahf seen???')
         groups_1 = None
 
+    pbar = tqdm.tqdm(total=len(steplist) - 1, desc='Tracing halos', unit='step')
     for i, step in enumerate(steplist[1:]):
         print('Starting step ' + step[-6:])
         
@@ -282,9 +285,10 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         groups_1 = groups_2
         del sim_high
         
-        
+        pbar.update(1)
         print('Finished\n')
-    
+    pbar.close()
+
     if save_file:
         df.to_hdf(save_file, key='ids')
     
@@ -555,7 +559,6 @@ def trace_halos_filtered(sim_base, test_first=True, **kwargs):
         print(f"\nProceeding with {len(working_steps)} working snapshots...")
     
     return trace_halos(sim_base, **kwargs)
-
 
 def test_halo_catalogs_comprehensive(sim_base, ahf_dir=None, **kwargs):
     """Test all snapshots to see which ones have working simulation files AND halo catalogs
