@@ -50,6 +50,9 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
     if max_ind < 100:
         max_ind = 100
     mat = bridge_1_to_2.catalog_transfer_matrix(max_index=max_ind, use_family=pb.family.dm, groups_1=groups_1, groups_2=groups_2)
+    # https://pynbody.readthedocs.io/latest/reference/_autosummary/pynbody.bridge.AbstractBridge.html#pynbody.bridge.AbstractBridge.count_particles_in_common
+    # https://pynbody.readthedocs.io/v1-docs/reference/convenience.html#pynbody.bridge.Bridge.catalog_transfer_matrix
+    # Switch to count_particles_in_common, deprecated
     # mat = bridge_1_to_2.count_particles_in_common(groups_1, groups_2, max_num_halos=max_ind, use_family=pb.family.dm)
     print(mat)
     Ni = np.sum(mat, axis=1) #number of particles in grp of sim 1
@@ -177,6 +180,7 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         else:
             all_grps = np.genfromtxt(steplist[0] + '.amiga.stat', skip_header=1, usecols=(0, 1), dtype=[('ID', '<i4'), ('N_tot', '<f8')])
         grplist = all_grps[all_grps['N_tot'] >= min_ntot]['ID']
+    print('grplist=', grplist)
 
     if trace_sats:
         cross_check = False
@@ -225,12 +229,13 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         try:
             if ahf_dir is not None:
                 pth = Path(sim_high.filename)
-                ahf_basename = str(list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))[0])#[:-5]
+                ahf_basename = str(list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))[0])[:-5]
                 print('ahf_basename=',ahf_basename)
                 groups_2 = sim_high.halos(halo_numbers='v1', filename=ahf_basename)
             else:
                 groups_2 = None
             grplist = match_by_merit(b, grplist, sim_high, ahf_dir=ahf_dir, groups_1=groups_1, groups_2=groups_2)
+            print('\tdone matching halos')
             df[step[-6:]] = grplist
 
             if trace_sats :
@@ -257,7 +262,8 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
                     groups_2_2 = None
                 grplist2 = match_by_merit(b2, grplist2, sim_high2, ahf_dir=ahf_dir, groups_1=groups_1, groups_2=groups_2_2)
                 df2[steplist[i+2][-6:]] = grplist2
-            except(ValueError, IndexError):
+            except(ValueError, IndexError) as err:
+                print(err)
                 print('Problem encountered in cross-check, skipping ' + step[-6:] + '\n')
             try:
                 del sim_high2
@@ -396,7 +402,7 @@ def trace_quantity(sim_base, trace_df=None, quantity='Mvir(M_sol)', ahf_quantity
     return [df.astype(float, errors='ignore') for df in quantity_dfs]
 
 
-
+# NS 06232025: added test functions for catalog info
 def test_halo_catalogs(sim_base, ahf_dir=None, **kwargs):
     """Test all snapshots to see which ones have working halo catalogs
     
