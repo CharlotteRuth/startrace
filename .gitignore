@@ -197,3 +197,7 @@ cython_debug/
 Docs Tutorials/testdata/
 Docs Tutorials/tutorial_gadget/
 Docs Tutorials/tutorial_gadget4/
+
+*/testdata/
+*/tutorial*
+*/tangos_changa.db
