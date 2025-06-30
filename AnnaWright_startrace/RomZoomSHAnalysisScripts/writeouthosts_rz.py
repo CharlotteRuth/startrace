@@ -19,6 +19,7 @@ import numpy as np
 import h5py
 import glob
 import sys
+import os
 
 def FindHosts(flist):
     tln = []
@@ -45,17 +46,21 @@ def FindHosts(flist):
     return tln,ind
         
 def main(cursim, odir):
-    hsfiles = glob.glob(odir+cursim+'_stardata_*.h5')
-    ofile = odir+cursim+'_halostarhosts.txt'
+    hsfiles = glob.glob(os.path.join(odir, cursim+'_stardata_*.h5'))
+    ofile = os.path.join(odir, cursim+'_halostarhosts.txt')
 
-    lnlist,ordind = FindHosts(sorted(hsfiles))
+    print(f"Found {len(hsfiles)} stardata files")
+    print(f"Output file: {ofile}")
 
-# write your data out with snapshots in chronological order
+    lnlist, ordind = FindHosts(sorted(hsfiles))
+
+    # write your data out with snapshots in chronological order
     lnlist = np.array(lnlist)
     ordind = np.array(ordind)
     argord = np.argsort(ordind)
     lnlist = lnlist[argord]
     with open(ofile, 'w') as f:
+        # f.writelines(lnlist) # try this?
         for item in lnlist:
             f.write(item)
 

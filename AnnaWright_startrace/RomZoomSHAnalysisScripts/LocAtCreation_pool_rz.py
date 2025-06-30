@@ -57,7 +57,7 @@ def main(simpath, db_sim, odir, n_processes = 4):
     fhs.simpath = simpath
     fhs.cursim = cursim
     fhs.db_sim = db_sim
-    halostarsfile = odir+simpath.split('/')[-2]+'_tf.npy' 
+    halostarsfile = os.path.join(odir, f"{simpath.split('/')[-2]}_tf.npy")
     
     dat = np.load(halostarsfile) # load in data
     fhs.dat = dat
@@ -117,20 +117,23 @@ def main(simpath, db_sim, odir, n_processes = 4):
 
     # Don't create a pool if running serially
     # shuffle
-    # list_of_chunks = np.random.permutation(list_of_chunks)
-    # print('Shuffled chunks:', list_of_chunks)
-    # pbar = tqdm.tqdm(total=len(list_of_chunks), desc='Processing snapshots', unit='chunks')
-    # for i, arg in enumerate(list_of_chunks):
-    #     print(f"Processing chunk {i+1}/{len(list_of_chunks)}")
-    #     result = fhs.FindHaloStars(arg)
-    #     pbar.update(1)
-    #     if result:
-    #         print(f"  Completed: {result.split('.')[-2][-6:]}\n")
-    # pbar.close()
-    # print("All chunks processed serially")
+    list_of_chunks = np.random.permutation(list_of_chunks)
+    print('Shuffled chunks:', list_of_chunks)
+    pbar = tqdm.tqdm(total=len(list_of_chunks), desc='Processing snapshots', unit='chunks')
+    for i, arg in enumerate(list_of_chunks):
+        print(f"Processing chunk {i+1}/{len(list_of_chunks)}")
+        try:
+            result = fhs.FindHaloStars(arg)
+        except Exception as e:
+            print(f"\tError processing chunk {i+1}: {e}")
+        pbar.update(1)
+        if result:
+            print(f"  Completed: {result.split('.')[-2][-6:]}\n")
+    pbar.close()
+    print("All chunks processed serially")
 
-    fhs.FindHaloStars(list_of_chunks[0])  # Useful for checking work on single snapshot
-                                            #    before multiprocessing. Replaces next four lines of code
+    # fhs.FindHaloStars(list_of_chunks[0])  # Useful for checking work on single snapshot
+    #                                         #    before multiprocessing. Replaces next four lines of code
 
     # print('Starting multiprocessing with', nprocesses, 'processes')
     

@@ -51,7 +51,7 @@ def FindHaloStars(dsnames, overwrite=True):
     print(simpath)
     
     # initialize output hdf5 file
-    filename = odir+cursim+'_stardata_'+dsnames[0].split('.')[-1]+'.h5'
+    filename = os.path.join(odir, f"{cursim}_stardata_{dsnames[0].split('.')[-1]}.h5")
     if os.path.exists(filename) and not overwrite:
         print("File already exists:", filename)
         return filename
