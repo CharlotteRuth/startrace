@@ -26,7 +26,7 @@ from astropy.table import Table
 import collections
 import sys
 
-def checkmatch_p(step,halo,hid,disp):
+def checkmatch_p(step,halo,hid,disp,sim):
     '''
     Check that <halo> (at snapshot number <step>) is the main progenitor of <hid> <disp> snapshots ago
     Returns True or False 
@@ -38,7 +38,7 @@ def checkmatch_p(step,halo,hid,disp):
         match = False
     return match
     
-def checkmatch_d(step,halo,hid,disp):
+def checkmatch_d(step,halo,hid,disp,sim):
     '''
     Check that <halo> (at snapshot number <step>) is the main descendant of <hid> <disp> snapshots in the future
     Returns True or False 
@@ -50,7 +50,7 @@ def checkmatch_d(step,halo,hid,disp):
         match = False
     return match
 
-def trackforward(step,halo):
+def trackforward(step,halo,sim):
     '''
     Track <halo> (at snapshot number <step>) forward in time
     Returns latest snapshot number and halo number when <halo> was self-consistently identified
@@ -70,7 +70,7 @@ def trackforward(step,halo):
     # make sure that this list is self-consistent - i.e., the last halo in this list identifies
     # <halo> as its main progenitor
     nd = len(desc)-1
-    match = checkmatch_p(step+nd,desc[nd],fid[0],nd)
+    match = checkmatch_p(step+nd,desc[nd],fid[0],nd,sim)
     stat = int(match)
 
     # If the final halo in the list doesn't identify <halo> as its main progenitor, identify
@@ -84,7 +84,7 @@ def trackforward(step,halo):
         while (s0 <= sf):
             ci = (s0+sf)//2
             ci_trans = np.argmax(refarr>ci)
-            match = checkmatch_p(step+ci_trans,desc[ci_trans],fid[0],ci_trans)
+            match = checkmatch_p(step+ci_trans,desc[ci_trans],fid[0],ci_trans,sim)
             if match==True:
                 s0 = ci+1
                 last_t = ci_trans
@@ -149,7 +149,7 @@ def main(sim, d, hsfile, ofile):
                         keystr = d[pstr]
                         print ('Found key: ',keystr)
                     else: # Otherwise, construct the self-consistent chain and store the unique ID
-                        unis,unih = trackforward(i,hid)
+                        unis,unih = trackforward(i,hid,sim)
                         keystr = str(int(sim[int(unis)].extension.split('.')[-1])).zfill(4)+'_'+str(unih)
                         print ('Unique: ',keystr) # store the unique ID
                         proj,fid,phid = sim[int(unis)][unih].calculate_for_progenitors('halo_number()','finder_id()','type()')
@@ -164,7 +164,7 @@ def main(sim, d, hsfile, ofile):
                                         pstr = str(unis-j).zfill(4)+','+str(proj[j])
                                         d[pstr] = keystr
                                 except:
-                                    match = checkmatch_d(unis-j,int(proj[j]),curfid,j)
+                                    match = checkmatch_d(unis-j,int(proj[j]),curfid,j,sim)
                                     if match:
                                         pstr = str(unis-j).zfill(4)+','+str(proj[j])
                                         d[pstr] = keystr
