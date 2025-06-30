@@ -44,7 +44,7 @@ def FindHosts(flist):
             ind.append(int(t))
     return tln,ind
         
-def main(cursim, odir='/home/christenc/Code/Datafiles/stellarhalo_trace_aw/'):
+def main(cursim, odir):
     hsfiles = glob.glob(odir+cursim+'_stardata_*.h5')
     ofile = odir+cursim+'_halostarhosts.txt'
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
         sys.exit()
     else:
         cursim = str(sys.argv[1])
-    main(cursim)
+    main(cursim, odir='/home/christenc/Code/Datafiles/stellarhalo_trace_aw/')
 
     
 '''

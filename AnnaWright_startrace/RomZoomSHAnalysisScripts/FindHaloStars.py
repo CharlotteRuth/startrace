@@ -3,6 +3,7 @@
 '''
 Spit off from LocAtCreation_pool_rz (Step 2) to better aid multiprocessing
 
+NS: Using os.path.join() for more robust path joining
 '''
 
 import numpy as np
@@ -31,10 +32,12 @@ tst = []
 tgyr = []
 createtime = []
 sim = []
+dat = None
 
-def FindHaloStars(dsnames):
-    halostarsfile = odir+simpath.split('/')[-2]+'_tf.npy'
-    dat = np.load(halostarsfile) # load in data                                                                                    
+def FindHaloStars(dsnames, overwrite=True):
+    # halostarsfile = odir+simpath.split('/')[-2]+'_tf.npy'
+    # print("Loading halo stars from file:", halostarsfile)
+    # dat = np.load(halostarsfile) # load in data                                                                                    
     halostars = dat[0]
     createtime = dat[1]
 
@@ -49,6 +52,9 @@ def FindHaloStars(dsnames):
     
     # initialize output hdf5 file
     filename = odir+cursim+'_stardata_'+dsnames[0].split('.')[-1]+'.h5'
+    if os.path.exists(filename) and not overwrite:
+        print("File already exists:", filename)
+        return filename
     with h5py.File(filename,'w') as f:
         f.create_dataset('particle_IDs', (1000000,))
         f.create_dataset('particle_positions', (1000000,3))
@@ -62,8 +68,9 @@ def FindHaloStars(dsnames):
     ctr = 0
     for step in dsnames:
         #s = pynbody.load(simpath+step+'/'+step) # load in snapshot
-        print(simpath+'snapshots_200crit_h329/'+ step)
-        s = pynbody.load(simpath+db_sim+step)
+        fpath = os.path.join(simpath, db_sim, step)
+        print('HaloStarsPath:',fpath)
+        s = pynbody.load(fpath)
         assert(step==s.filename.split('/')[-1]) # and make sure it's the right one
 
         # identify the timespan we should be checking for new stars
@@ -93,6 +100,7 @@ def FindHaloStars(dsnames):
         ctarr = s.s['tform'][np.ma.compressed(res)].in_units('Gyr')
         idarr = s.s['iord'][np.ma.compressed(res)]
         hostarr = s.s['amiga.grp'][np.ma.compressed(res)]
+        print('Host Array:', hostarr)
         starr = np.repeat(float(s.filename.split('.')[-1]),len(ctarr))
 
         # Creates a dictionary that relates the potential values of the amiga.grp array to the host index in the tangos database (fid)
@@ -100,22 +108,25 @@ def FindHaloStars(dsnames):
         #     a halo to -1s and convert all other host IDs to their index in the tangos database
         fid = {}
         fid['0'] = -1
-        for i in range(1,len(sim[int(ind)].halos[:])+1):
+        halos = sim[int(ind)].halos[:]
+        print("Looking through",len(halos),"halos")
+        for i, halo in enumerate(halos, 1):
             # fid[str(sim[int(ind)][int(i)].finder_id)] = i  ### Original code by Anna. Causing a problem with my DB
             try:
-                fid[str(sim[int(ind)][int(i)].halo_number)] = i  ### Altered version of above line
+                fid[str(halo.halo_number)] = i
                 # print(i, sim[int(ind)][int(i)].halo_number)
             except:
-                print("Missing: ",str(sim[int(ind)]),str(i))
+                print(f"Missing halo {i}")
 
-        dbhostarr = np.array([])
+        # Pre-allocate array with known size instead of using np.append()
+        dbhostarr = np.full(len(hostarr), -1, dtype=int)
         print("Amiga Host IDs",np.unique(hostarr))
         # for each star being considered, take the host id (amiga.grp), use it to look up the fid and store it in an array called dbhostarr
-        for x in hostarr:
+        for i, x in enumerate(hostarr):
             try:
-                dbhostarr = np.append(dbhostarr, fid[str(x)])
+                dbhostarr[i] = fid[str(x)]
             except:
-                dbhostarr = np.append(dbhostarr, -1)  # CC: Is it possible that amiga is using -1 now for unassigned stars? These aren't being caught
+                dbhostarr[i] = -1  # Already pre-filled with -1, but explicit for clarity  # CC: Is it possible that amiga is using -1 now for unassigned stars? These aren't being caught
         # CC: Anna's original code. Replaced with above for loop to catch the -1 cases, even though ugly
         # dbhostarr = np.array([fid[str(x)] for x in hostarr]) 
         assert(len(starinds)==len(idarr)) # make sure you got everything
@@ -141,4 +152,6 @@ def FindHaloStars(dsnames):
                 f.create_dataset('timestep_location',data=compsteparr)
                 f.create_dataset('particle_hosts',data=comphostarr)
         ctr = ctr+1
-    return
+    
+    print(f"Process completed {len(dsnames)} snapshots, output: {filename}")
+    return filename

@@ -31,7 +31,7 @@ import pynbody
 import tangos as db
 from collections import defaultdict
 import sys
-
+import tqdm.notebook as tqdm
 
 import os
 # NS: added this to make sure the path is correct
@@ -56,9 +56,11 @@ def main(simpath, db_sim, odir, n_processes = 4):
     fhs.odir = odir
     fhs.simpath = simpath
     fhs.cursim = cursim
-    halostarsfile = odir+simpath.split('/')[-2]+'_tf.npy'
+    fhs.db_sim = db_sim
+    halostarsfile = odir+simpath.split('/')[-2]+'_tf.npy' 
     
     dat = np.load(halostarsfile) # load in data
+    fhs.dat = dat
     halostars = dat[0]
     createtime = dat[1]
     #fhs.createtime = createtime
@@ -111,20 +113,47 @@ def main(simpath, db_sim, odir, n_processes = 4):
         if n == nchunks-1:
             steps_list_chunk = steplist[chunk_start_indices[n]::]
         list_of_chunks.append(steps_list_chunk)
+    print('Chunks to process:',list_of_chunks)
 
-    for arg in list_of_chunks:
-        fhs.FindHaloStars(arg)
-        
-    # fhs.FindHaloStars(list_of_chunks[0])  # Useful for checking work on single snapshot
+    # Don't create a pool if running serially
+    # shuffle
+    # list_of_chunks = np.random.permutation(list_of_chunks)
+    # print('Shuffled chunks:', list_of_chunks)
+    # pbar = tqdm.tqdm(total=len(list_of_chunks), desc='Processing snapshots', unit='chunks')
+    # for i, arg in enumerate(list_of_chunks):
+    #     print(f"Processing chunk {i+1}/{len(list_of_chunks)}")
+    #     result = fhs.FindHaloStars(arg)
+    #     pbar.update(1)
+    #     if result:
+    #         print(f"  Completed: {result.split('.')[-2][-6:]}\n")
+    # pbar.close()
+    # print("All chunks processed serially")
+
+    fhs.FindHaloStars(list_of_chunks[0])  # Useful for checking work on single snapshot
                                             #    before multiprocessing. Replaces next four lines of code
 
-    '''
-    p.map(fhs.FindHaloStars, [arg for arg in list_of_chunks])
-
-    p.close()
-    p.terminate()
-    p.join()
-    '''
+    # print('Starting multiprocessing with', nprocesses, 'processes')
+    
+    # try:
+    #     # Use map and collect results
+    #     results = p.map(fhs.FindHaloStars, list_of_chunks)
+        
+    #     print("All processes completed successfully!")
+    #     print("Output files created:")
+    #     for result in results:
+    #         if result:
+    #             print(f"  {result}")
+                
+    # except Exception as e:
+    #     print(f"Error during multiprocessing: {e}")
+    #     p.terminate()  # Force terminate if there's an error
+        
+    # finally:
+    #     # Proper cleanup
+    #     p.close()
+    #     p.join()
+    #     print('Pool properly closed and joined')
+    
 
         
 if __name__ == '__main__':
