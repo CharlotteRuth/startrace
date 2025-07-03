@@ -108,10 +108,12 @@ def FindHaloStars(dsnames, overwrite=True):
         #     a halo to -1s and convert all other host IDs to their index in the tangos database
         fid = {}
         fid['0'] = -1
+        fid['-1'] = -1  # NS: Added to handle cases where amiga.grp is -1
         halos = sim[int(ind)].halos[:]
         print("Looking through",len(halos),"halos")
         for i, halo in enumerate(halos, 1):
             # fid[str(sim[int(ind)][int(i)].finder_id)] = i  ### Original code by Anna. Causing a problem with my DB
+            # NS: finder_id in our db is a random unicode string
             try:
                 fid[str(halo.halo_number)] = i
                 # print(i, sim[int(ind)][int(i)].halo_number)
@@ -123,11 +125,12 @@ def FindHaloStars(dsnames, overwrite=True):
         print("Amiga Host IDs",np.unique(hostarr))
         # for each star being considered, take the host id (amiga.grp), use it to look up the fid and store it in an array called dbhostarr
         for i, x in enumerate(hostarr):
-            try:
-                dbhostarr[i] = fid[str(x)]
-            except:
-                dbhostarr[i] = -1  # Already pre-filled with -1, but explicit for clarity  # CC: Is it possible that amiga is using -1 now for unassigned stars? These aren't being caught
-        # CC: Anna's original code. Replaced with above for loop to catch the -1 cases, even though ugly
+            dbhostarr[i] = fid[str(x)]
+            # try:
+            #     dbhostarr[i] = fid[str(x)]
+            # except:
+            #     dbhostarr[i] = -1  # Already pre-filled with -1, but explicit for clarity  # CC: Is it possible that amiga is using -1 now for unassigned stars? These aren't being caught
+        # NS: fixed issue, CC: Anna's original code. Replaced with above for loop to catch the -1 cases, even though ugly
         # dbhostarr = np.array([fid[str(x)] for x in hostarr]) 
         assert(len(starinds)==len(idarr)) # make sure you got everything
 
