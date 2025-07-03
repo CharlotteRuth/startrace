@@ -142,19 +142,19 @@ def FindHaloStars(dsnames, overwrite=True):
         compctarr.extend(ctarr)
         compsteparr.extend(starr)
         comphostarr.extend(dbhostarr)
-        if ctr%4 == 0 or ctr==(len(dsnames)-1):
-            with h5py.File(filename,'a') as f:
-                del f['particle_IDs']
-                del f['particle_creation_times']
-                del f['timestep_location']
-                del f['particle_positions']
-                del f['particle_hosts']
-                f.create_dataset('particle_IDs',data=compidarr)
-                f.create_dataset('particle_creation_times',data=compctarr)
-                f.create_dataset('particle_positions',data=compposarr)
-                f.create_dataset('timestep_location',data=compsteparr)
-                f.create_dataset('particle_hosts',data=comphostarr)
-        ctr = ctr+1
+        # if ctr%4 == 0 or ctr==(len(dsnames)-1):
+        with h5py.File(filename,'a') as f:
+            del f['particle_IDs']
+            del f['particle_creation_times']
+            del f['timestep_location']
+            del f['particle_positions']
+            del f['particle_hosts']
+            f.create_dataset('particle_IDs',data=compidarr)
+            f.create_dataset('particle_creation_times',data=compctarr)
+            f.create_dataset('particle_positions',data=compposarr)
+            f.create_dataset('timestep_location',data=compsteparr)
+            f.create_dataset('particle_hosts',data=comphostarr)
+        # ctr = ctr+1
     
     print(f"Process completed {len(dsnames)} snapshots, output: {filename}")
     return filename

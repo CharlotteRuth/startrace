@@ -64,7 +64,7 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
 
     # Check for zeros to prevent division by zero
     if np.any(Ni == 0) or np.any(Nj == 0):
-        print('\tWarning: Some halos have zero particles - this may indicate corrupted data')
+        print('\tWarning: Some halos have zero particles')
         print(f'\tZeros in Ni: {np.sum(Ni == 0)}, Zeros in Nj: {np.sum(Nj == 0)}')
     
     # eps = 1e-10
