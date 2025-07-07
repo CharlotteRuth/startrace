@@ -119,48 +119,48 @@ def main(simpath, db_sim, odir, n_processes=4, overwrite=True):
 
     # Don't create a pool if running serially
     # shuffle
-    # list_of_chunks = np.random.permutation(list_of_chunks)
-    # print(f'Shuffled chunks:', list_of_chunks)
-    # pbar = tqdm.tqdm(total=len(list_of_chunks), desc=f'Processing', unit='chunks')
-    # for i, arg in enumerate(list_of_chunks):
-    #     print(f"Processing chunk {i+1}/{len(list_of_chunks)}: {arg}")
-    #     try:
-    #         result = fhs.FindHaloStars(arg,overwrite=overwrite)
-    #         print(f"  Completed: {result.split('.')[-2][-6:]}\n")
-    #     except Exception as e:
-    #         print(f"\tError processing chunk {i+1}: {e}")
-    #     pbar.update(1)
-    # pbar.close()
-    # print("All chunks processed serially")
+    list_of_chunks = np.random.permutation(list_of_chunks)
+    print(f'Shuffled chunks:', list_of_chunks)
+    pbar = tqdm.tqdm(total=len(list_of_chunks), desc=f'Processing', unit='chunks')
+    for i, arg in enumerate(list_of_chunks):
+        print(f"Processing chunk {i+1}/{len(list_of_chunks)}: {arg}")
+        try:
+            result = fhs.FindHaloStars(arg,overwrite=overwrite)
+            print(f"  Completed: {result.split('.')[-2][-6:]}\n")
+        except Exception as e:
+            print(f"\tError processing chunk {i+1}: {e}")
+        pbar.update(1)
+    pbar.close()
+    print("All chunks processed serially")
 
     # fhs.FindHaloStars(list_of_chunks[0])  # Useful for checking work on single snapshot
     #                                         #    before multiprocessing. Replaces next four lines of code
 
-    print('Starting multiprocessing with', nprocesses, 'processes')
+    # print('Starting multiprocessing with', nprocesses, 'processes')
 
-    idxs = list(range(len(list_of_chunks)))
+    # idxs = list(range(len(list_of_chunks)))
 
-    # interweave indices with chunks
-    interleaved = list(zip(list_of_chunks, idxs))
-    for chunk in interleaved:
-        print("Chunk:", chunk[0], "Index:", chunk[1])
+    # # interweave indices with chunks
+    # interleaved = list(zip(list_of_chunks, idxs))
+    # for chunk in interleaved:
+    #     print("Chunk:", chunk[0], "Index:", chunk[1])
     
-    try:
-        # Use map and collect results
-        results = p.map(multiprocessing_wrapper, interleaved)
+    # try:
+    #     # Use map and collect results
+    #     results = p.map(multiprocessing_wrapper, interleaved)
 
-        print("All processes completed successfully!")
-        print("Output files created:")
+    #     print("All processes completed successfully!")
+    #     print("Output files created:")
                 
-    except Exception as e:
-        print(f"Error during multiprocessing: {e}")
-        p.terminate()  # Force terminate if there's an error
+    # except Exception as e:
+    #     print(f"Error during multiprocessing: {e}")
+    #     p.terminate()  # Force terminate if there's an error
         
-    finally:
-        # Proper cleanup
-        p.close()
-        p.join()
-        print('Pool properly closed and joined')
+    # finally:
+    #     # Proper cleanup
+    #     p.close()
+    #     p.join()
+    #     print('Pool properly closed and joined')
     
 
 def multiprocessing_wrapper(interleaved):
