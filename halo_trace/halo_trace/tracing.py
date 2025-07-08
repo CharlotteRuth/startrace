@@ -209,8 +209,8 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         print('185ahfbasename=',ahf_basename)
         groups_1 = sim_low.halos(halo_numbers='v1', filename=ahf_basename)
     else:
-        print('no ahf seen???')
-        groups_1 = None
+        print('default ahf')
+        groups_1 = sim_low.halos(halo_numbers='v1')
 
     pbar = tqdm.tqdm(total=len(steplist) - 1, desc='Tracing halos', unit='step')
     for i, step in enumerate(steplist[1:]):
@@ -236,7 +236,7 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
                 print('ahf_basename=',ahf_basename)
                 groups_2 = sim_high.halos(halo_numbers='v1', filename=ahf_basename)
             else:
-                groups_2 = None
+                groups_2 = sim_high.halos(halo_numbers='v1')
             grplist = match_by_merit(b, grplist, sim_high, ahf_dir=ahf_dir, groups_1=groups_1, groups_2=groups_2)
             print('\tdone matching halos')
             df[step[-6:]] = grplist
@@ -262,7 +262,7 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
                     ahf_basename = str(list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))[0])[:-5]
                     groups_2_2 = sim_high2.halos(filename=ahf_basename, halo_numbers='v1')
                 else:
-                    groups_2_2 = None
+                    groups_2_2 = sim_high2.halos(halo_numbers='v1')
                 grplist2 = match_by_merit(b2, grplist2, sim_high2, ahf_dir=ahf_dir, groups_1=groups_1, groups_2=groups_2_2)
                 df2[steplist[i+2][-6:]] = grplist2
             except(ValueError, IndexError) as err:
@@ -509,7 +509,7 @@ def test_halo_catalogs(sim_base, ahf_dir=None, **kwargs):
             else:
                 # Try default halo loading (no ahf_dir specified)
                 try:
-                    groups = sim.halos()
+                    groups = sim.halos(halo_numbers='v1')
                     print("SUCCESS (default)")
                     working_steps.append(step)
                 except Exception as e:
@@ -636,7 +636,7 @@ def test_halo_catalogs_comprehensive(sim_base, ahf_dir=None, **kwargs):
                     else:
                         # Try default halo loading
                         try:
-                            groups = sim.halos()
+                            groups = sim.halos(halo_numbers='v1')
                             print(f"   SUCCESS - Loaded {len(groups)} halo groups")
                             working_steps.append(step)
                         except Exception as e:
