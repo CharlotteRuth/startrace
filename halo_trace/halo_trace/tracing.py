@@ -58,9 +58,9 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
     # mat = bridge_1_to_2.count_particles_in_common(groups_1, groups_2, max_num_halos=max_ind, use_family=pb.family.dm)
     print(mat)
     Ni = np.sum(mat, axis=1) #number of particles in grp of sim 1
-    print('\tNi=',Ni)
+    # print('\tNi=',Ni)
     Nj = np.sum(mat, axis=0) #number of particles in grp of sim 2
-    print('\tNj=',Nj)
+    # print('\tNj=',Nj)
 
     # Check for zeros to prevent division by zero
     if np.any(Ni == 0) or np.any(Nj == 0):

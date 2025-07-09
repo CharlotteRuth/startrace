@@ -10,6 +10,8 @@ log file recording what it did.
 
 import glob
 import os
+os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
+os.environ['TANGOS_DB_CONNECTION'] = '/home/selvani/MAP/pynbody/Tangos/Marvel_BN_N10.db'
 import numpy as np
 import tangos as db
 import yt
@@ -20,17 +22,18 @@ import math
 import h5py
 from tangos.core.halo import PhantomHalo
 
-dbname = 'Maelstrom.9f11c.all.DD' # your tangos db
-pathtofiles = '/home/user/Anna/Maelstrom/Maelstrom_rockstarbins/' # Where are your rockstar binary files?
-halofile = '/home/user/Anna/Maelstrom/Maelstrom_RD0042_allhalostardata.h5' # Where is your allhalostardata file?
-logfile = '/home/user/Anna/Maelstrom/mmlclog.txt' # Where should I write out the log file?
+dbname = 'cptmarvel.4096g5HbwK1BH_bn' # your tangos db
+pathtofiles = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/cptmarvel.4096g5HbwK1BH_bn/' # Where are your rockstar binary files?
+halofile = '/home/selvani/MAP/pynbody/stellarhalo_trace_aw/Maelstrom_RD0042_allhalostardata.h5' # Where is your allhalostardata file?
+logfile = '/home/selvani/MAP/pynbody/stellarhalo_trace_aw//mmlclog.txt' # Where should I write out the log file?
 tlim = 30 # give up after failing to find a descendant for how many snapshots in a row?
 maxfid = 10000 # maximum finder ID for a non-phantom halo
 
 # Minimum fraction of particles halos must share to be linked. A potential descendant must meet both criteria for the code
 # to actually consider it a match and make a link
-# BELOW VALUES WERE SANE FOR FOGGIE+ROCKSTAR
-# they may not be reasonable for ChaNGa+AHF
+#! BELOW VALUES WERE SANE FOR FOGGIE+ROCKSTAR
+#! they may not be reasonable for ChaNGa+AHF
+#! NS: Check to change
 pthresh_f = 0.5 # what fraction of your halo's particles must a potential descendant have to be considered a match?  
 pthresh_b = 0.4 # what fraction of a potential descendant's particles must have come from your halo to be considered a match?
 
@@ -73,23 +76,55 @@ def checkmatch_d(step,halo,hid,disp):
     return match
 
 def trackforward(step,halo):
+    """
+    Track a halo forward to find its last real (non-phantom) descendant.
+    
+    Parameters
+    ----------
+    step : int
+        Starting timestep index
+    halo : int
+        Halo number to track
+        
+    Returns
+    -------
+    tuple of (int, int)
+        (final_timestep, final_halo_number) of last real descendant
+        
+    Notes
+    -----
+    This function follows a halo's descendant chain, filtering out phantom
+    halos (those with finder_id > maxfid), and uses binary search to find
+    the last timestep where the halo exists as a real object.
+    
+    The algorithm:
+    1. Gets full descendant chain
+    2. Trims phantom halos from the end
+    3. Uses binary search to find last valid connection
+    """
+
     # Can simplify considerably once earlier/later works with phantoms
+    # Get descendant chain?
     desc,fid = sim[int(step)][int(halo)].calculate_for_descendants('halo_number()','finder_id()')
+
     # Trim phantoms off the end of the list
     eol = fid[-1]
     while eol>maxfid:
         fid = fid[:-1]
         desc = desc[:-1]
         eol = fid[-1]
+
     nd = len(desc)-1
     match = checkmatch_p(step+nd,desc[nd],fid[0],nd)
     stat = int(match)
     last_t = 0
+
     if stat == 0:
         ma_desc = desc[fid<maxfid]
         refarr = np.cumsum(fid<maxfid)
         sf = len(ma_desc)
         s0 = 0
+        # Binary search for last valid connection
         while (s0 <= sf):
             ci = (s0+sf)//2
             ci_trans = np.argmax(refarr>ci)
@@ -275,10 +310,57 @@ def comp_halo_parts(sim,ufc,h1,myveryowntimestep,potmatches):
     return descs,fracc
 
 def BringMeARing(hlist):
+    """
+    Main function to process halo linking for a list of host IDs.
+    
+    Parameters
+    ----------
+    hlist : list or numpy.ndarray
+        List of host IDs to process (format: 'snapshot_halonumber')
+        
+    Notes
+    -----
+    This is the main workhorse function that:
+    
+    1. **Unique ID Resolution**: Updates host IDs to their current unique form
+    2. **Descendant Search**: Looks for potential descendants in future snapshots
+    3. **Particle Matching**: Uses particle overlap to confirm matches
+    4. **Link Creation**: Creates database links between confirmed matches
+    5. **Phantom Creation**: Inserts phantom halos for gaps in the chain
+    6. **Chain Following**: Continues tracking until natural termination
+    
+    The algorithm implements several sophisticated features:
+    
+    - **Sequential Limit**: Gives up after `tlim` consecutive failed matches
+    - **Chain Jumping**: Follows existing descendant chains to their end
+    - **Bidirectional Linking**: Creates both forward and backward links
+    - **Phantom Management**: Assigns unique finder IDs to phantom halos
+    - **Logging**: Records all operations for manual review
+    
+    Process Flow:
+    1. For each host ID, find its current unique form
+    2. Start descendant search from the last known snapshot
+    3. Find orphan halos in each subsequent snapshot
+    4. Compare particle overlap with each orphan
+    5. If match found, create link and continue from match
+    6. If no match, create phantom halo and continue
+    7. Stop when reaching tlim consecutive failures or end of simulation
+    
+    Database Operations:
+    - Creates HaloLink objects for bidirectional connections
+    - Generates PhantomHalo objects with unique finder IDs
+    - Commits changes to preserve merger tree integrity
+    
+    Error Handling:
+    - Logs ambiguous cases for manual review
+    - Tracks "lost causes" to avoid infinite loops
+    - Validates adjacency before creating links
+    """
     for halo in hlist:
         print (halo)
         with open(logfile,'a') as lf:
             lf.write('----ID: '+halo+'----\n')
+
         # Check whether there's an updated Unique ID to make sure we don't repeat
         # any we've already taken care of
         sim = db.get_simulation(dbname) # have to reload in case we've updated db
@@ -290,6 +372,7 @@ def BringMeARing(hlist):
         print ('Unique ID:',halo)
         with open(logfile,'a') as lf:
             lf.write('Unique ID: '+halo+'\n')
+
         # If we haven't already given up on this one, look for potential progenitors or descendants
         if halo not in lostcauses:
             hstr = halo.split('_')
@@ -301,48 +384,59 @@ def BringMeARing(hlist):
             stind = np.where(inist==tslist)[0][0] # starting point: index of this snapshot
             ctr = stind+1
             fc = 0 # how many snapshots have we checked without finding a match?
+
+            #? Search for descendants
             while ctr<=len(tslist) and fc<tlim: # start with snapshot after the one where original halo is last found
                 print ('Searching step ',tslist[int(ctr)])
                 sim = db.get_simulation(dbname)
                 h1 = sim[int(stind)][int(inih)] # our original halo
                 t2 = sim[int(ctr)] # the snapshot we're currently searching
                 children = find_orphans(t2,seekdir='b') # check this snapshot for halos that have no progenitors
-                desc = [] # likely descendants
-                fcar = [] # fraction of particles carried over
+
+                desc = [] #! likely descendants
+                fcar = [] #! fraction of particles carried over
                 sim = db.get_simulation(dbname)
                 d,f = comp_halo_parts(sim,int(stind),inih,int(ctr),children) # check how many particles each orphan has in common with original halo
                 tlist.append(ctr)
-                if np.isnan(d[0]): # if we didn't find any matches
+
+                # if we didn't find any matches
+                if np.isnan(d[0]): 
                     hchain.append(0)
                     fconn.append(f)
                     ctr += 1
                     fc += 1 # increment number of sequential matchless snapshots
-                elif d[0] == d[1]: # If we only found one potential descendant
+                # If we only found one potential descendant
+                elif d[0] == d[1]: 
                     fc = 0 # reset number of sequential matchless snapshots
                     hchain.append(d[0])
                     # does our new descendant have descendants of its own?
                     hid,fid,stp = sim[int(ctr)][int(d[0])].calculate_for_descendants('halo_number()','finder_id()','step_path()')
                     fconn.append(f)
-                    if len(hid[fid<maxfid])>1: # if there's at least one non-phantom descendant, run down that chain and start from the
-                                               # end of it
+                    # if there's at least one non-phantom descendant, run down that chain and 
+                    # start from the end of it
+                    if len(hid[fid<maxfid])>1: 
                         inist = int(stp[fid<maxfid][-1].split('/')[-1][2:]) # our new starting point: snapshot
                         inih = int(hid[fid<maxfid][-1]) # our new starting point: halo
                         ctr = inist+1
-                    else: # If it has no descendants, treat the matched halo as our new starting point 
+                    # If it has no descendants, treat the matched halo as our new starting point 
+                    else: 
                         inist = ctr 
                         inih = d[0]
                         ctr += 1
                 else: # if we have more than one potential match, make a note of it in the log file so you can come back to this and deal
                       # with it manually. Good chance this is a halo finder issue.
                     fconn.append(f)
-                    hchain.append(-5)
+                    hchain.append(-5) #! -5 indicates multiple matches
                     with open(logfile,'a') as lf:
                         lf.write('PLEASE CHECK ON ME\n')
                     ctr += 1
                 # Will need to check for double phantoms
+
             while len(hchain)>0 and hchain[-1] == 0: # Trim phantoms off the end of the list - should only be an issue for rockstar
                 hchain.pop(-1)
                 tlist.pop(-1)
+
+            # Check for non-phantom matches
             if len(tlist)>0: # if we actually found some non-phantom matches
                 curt = int(halo.split('_')[0])
                 curi = np.where(curt==tslist)[0][0]
@@ -351,15 +445,17 @@ def BringMeARing(hlist):
             else: # if we found no matches before hitting our sequential matchless snapshot limit
                 print ('GIVING UP ON',halo)
                 lostcauses.append(halo)
+
             # Make the necessary links
             for h,t,f in zip(hchain,tlist,fconn): # for each match (includes phantoms between halo matches)
-                if t-curt < 2: # check that steps are adjacent before you try to link them
+                if t-curt < 2: #! CHANGE? check that steps are adjacent before you try to link them
                     with open(logfile,'a') as lf:
                         lf.write(str(t)+': '+str(curh)+'->'+str(h)+' ,'+str(f)+'\n')
                     if isinstance(curh,int): # check whether your current object is a halo or a phantom
                         myhalo = sim[int(curi)][int(curh)]
                     else: 
                         myhalo = sim[int(curi)].phantoms[int(curh[1:])-1]
+                    #! WHAT WE NEED
                     if h != 0: # if this descendant is a halo, create link between it and our current object
                         link1 = db.core.HaloLink(myhalo, sim[int(t)][int(h)], db.core.get_or_create_dictionary_item(db.core.get_default_session(), 'manual_link'))
                         link2 = db.core.HaloLink(sim[int(t)][int(h)], myhalo, db.core.get_or_create_dictionary_item(db.core.get_default_session(), 'manual_link'))
