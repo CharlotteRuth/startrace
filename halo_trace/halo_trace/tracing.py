@@ -35,7 +35,7 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
         pth = Path(sim.filename)
         if ahf_dir is not None:
             ahf_abspath = list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))
-            print(ahf_abspath)
+            # print(ahf_abspath)
             stat_abspath = list(pth.parent.glob(f'{ahf_dir}/*stat'))
         else:
             ahf_abspath = glob.glob(sim.filename + '*z*AHF_halos')
@@ -56,7 +56,7 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
     # https://pynbody.readthedocs.io/v1-docs/reference/convenience.html#pynbody.bridge.Bridge.catalog_transfer_matrix
     # Switch to count_particles_in_common, deprecated
     # mat = bridge_1_to_2.count_particles_in_common(groups_1, groups_2, max_num_halos=max_ind, use_family=pb.family.dm)
-    print(mat)
+    # print(mat)
     Ni = np.sum(mat, axis=1) #number of particles in grp of sim 1
     # print('\tNi=',Ni)
     Nj = np.sum(mat, axis=0) #number of particles in grp of sim 2
@@ -91,8 +91,8 @@ def match_by_merit(bridge_1_to_2, sim1_grp_list, sim=False, ahf_dir=None, groups
     
     return np.array(sim2_grplist)
 
-def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep=None, save_file=True,
-                min_ntot=500, cross_check=True, ahf_dir=None, **kwargs):
+def trace_halos(sim_base, grplist=None, steplist=None, trace_sats=False, maxstep=None, save_file=True,
+                min_ntot=10, cross_check=True, ahf_dir=None, **kwargs):
     """Trace halos to between time steps
     
     Will find the lowest redshift available step, and will iterate through
@@ -110,9 +110,9 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
     
     save_file(default True) - if True or string, save the resulting dataframe with default name
         or passed string. Will check for existence of file before overwrite
-    
-    min_ntot(default 500) - minimum number of particles in halos to track
-    
+
+    min_ntot(default 10) - minimum number of particles in halos to track
+
     cross_check(default True) - if True, simulatenously link every step and every other step, and
         compare between the two to avoid losing track of halos
 
@@ -133,7 +133,8 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         #for substep in steplist (e.g. [71, 96, 4096]), iterate through step in all_steplist to check if
         #substep is in step
         steplist = [step for step in all_steplist for substep in steplist if str(substep).rjust(6, '0') in step]
-		
+    print('Steplist',steplist)
+        
     if ahf_dir is not None:
         temp_steplist = []
         print(len(steplist))
@@ -158,13 +159,13 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
             if trace_sats:
                 save_file = steplist[0] + '.trace_back_sats.hdf5'
             else:
-                save_file = steplist[0] + '.trace_back.hdf5'
+                save_file = steplist[0] + '.trace_back_merge.hdf5'
         if os.path.isfile(save_file):
-            print('File exists: ' + save_file)
+            print('File exists: ' + os.getcwd() + save_file)
             print('Aborting')
             return None
         else:
-            print('File will be saved as ' + save_file)
+            print('File will be saved as ' + os.getcwd() + save_file)
     
     if maxstep is not None:
         steplist = [step for step in steplist if int(step.split('.')[-1]) >= int(maxstep)]
@@ -199,17 +200,17 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
         print('Must trace through at least 3 steps to use cross check')
         return
     
-    print('simlow=',steplist[0])
+    # print('simlow=',steplist[0])
     sim_low = pb.load(steplist[0])
-    print('simlow=',sim_low)
+    # print('simlow=',sim_low)
     if ahf_dir is not None:
         pth = Path(sim_low.filename)
-        print('pth=',pth)
+        # print('pth=',pth)
         ahf_basename = str(list(pth.parent.glob(f'{ahf_dir}/*AHF_halos'))[0])[:-5]
-        print('185ahfbasename=',ahf_basename)
+        # print('185ahfbasename=',ahf_basename)
         groups_1 = sim_low.halos(halo_numbers='v1', filename=ahf_basename)
     else:
-        print('default ahf')
+        # print('default ahf')
         groups_1 = sim_low.halos(halo_numbers='v1')
 
     pbar = tqdm.tqdm(total=len(steplist) - 1, desc='Tracing halos', unit='step')
@@ -220,7 +221,7 @@ def trace_halos(sim_base, trace_sats=False, grplist=None, steplist=None, maxstep
             grplist2 = grplist
             
         sim_high = pb.load(step)
-        print('simhigh=',sim_high)
+        # print('simhigh=',sim_high)
         b = pb.bridge.OrderBridge(sim_low, sim_high)
         #b = sim_low.bridge(sim_high)
 
