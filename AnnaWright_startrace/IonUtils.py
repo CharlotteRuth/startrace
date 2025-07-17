@@ -26,7 +26,7 @@ def calculate_gas_mass(s):
     # Calculate for each gas particle the fraction of the hydrogen that is neutral hydrogen
     s.gas['hiif'] = pynbody.analysis.ionfrac.calculate(s.gas,ion='hi')
     # Calculate the fraction of oxygen that is OVI
-    s.gas['oviif'] = pynbody.analysis.ionfrac.calculate(s.gas,ion='ovi')
+    # s.gas['oviif'] = pynbody.analysis.ionfrac.calculate(s.gas,ion='ovi')
     
     #holder variable for mass, so that if "mass" is changed for particles (such as for HI and OVI rho calculations),
     #no dependencies are affected
@@ -41,17 +41,16 @@ def calculate_gas_mass(s):
         return sim.g['hiif']*sim.gas['hydrogen']
         
     @pynbody.derived_array
-    def OVI_frac(sim):
-        
-        return sim.g['oviif']*sim.gas['OxMassFrac']    
+    # def OVI_frac(sim):
+    #     return sim.g['oviif']*sim.gas['OxMassFrac']    
     #mass of HI and OVI in a given particle
     @pynbody.derived_array
     def HI_mass(sim):
         return sim.gas['mass_holder']* sim.gas['HI_frac']
     
-    @pynbody.derived_array
-    def OVI_mass(sim):
-        return np.multiply(sim.gas['mass_holder'], sim.gas['OVI_frac'])
+    # @pynbody.derived_array
+    # def OVI_mass(sim):
+    #     return np.multiply(sim.gas['mass_holder'], sim.gas['OVI_frac'])
     
     
     # number of atoms of HI and OVI in a given particle.
@@ -59,12 +58,12 @@ def calculate_gas_mass(s):
     def HI_N(sim):
         return (sim.gas['HI_mass']*HI_N_in_Msol)
     
-    @pynbody.derived_array
-    def OVI_N(sim):
-        return (sim.gas['OVI_mass']*OVI_N_in_Msol)
+    # @pynbody.derived_array
+    # def OVI_N(sim):
+    #     return (sim.gas['OVI_mass']*OVI_N_in_Msol)
     
     #set units as relevant for mass which needs it.
-    s.g['OVI_mass'].units = units.Unit('Msol')
+    # s.g['OVI_mass'].units = units.Unit('Msol')
     s.g['HI_mass'].units = units.Unit('Msol')
 
 def calculate_gas_rhos(s):
@@ -88,9 +87,9 @@ def calculate_gas_rhos(s):
     np.copyto(s.g['mass'], s.g['HI_mass'])
     s.gas['HI_rho'] = pynbody.sph.rho(s.gas) #get an array of each particles respective "HI density (sph.rho automatically pulls the ['mass'] in
     
-    #repeat for OVI
-    np.copyto(s.g['mass'], s.g['OVI_mass'])
-    s.gas['OVI_rho'] = pynbody.sph.rho(s.gas)
+    # #repeat for OVI
+    # np.copyto(s.g['mass'], s.g['OVI_mass'])
+    # s.gas['OVI_rho'] = pynbody.sph.rho(s.gas)
     
     #as the original mass values are now OVI, pull in from the stable "mass holder" and reset them. Reset rho as well.
     np.copyto(s.g['mass'], s.g['mass_holder'])
