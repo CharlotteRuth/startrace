@@ -5,6 +5,7 @@ I'll make a proper README.md file later, but for now, this is a placeholder.
 
 ## AnnaWright_startrace
 - `run_Anna_star_trace.ipynb`: This notebook has code and documentation for Anna Wright's star particle tracing pipeline (from `/RomZoomSHAnalysisScripts`). Steps 1-6c are the standard pipeline. Step 3.5 is our modified 
+- `PlotHaloMergers.ipynb`: This notebook helps to visualize halo mergers after we've run the star particle tracing pipeline.
 
 
 ## Docs Tutorials
@@ -16,7 +17,7 @@ I'll make a proper README.md file later, but for now, this is a placeholder.
 - `/halo_trace/tracing.py` has been modified to handle file paths better.
 
 
-## Justice_League_Code
+## Justice_League_Code (Unused)
 - Hollis Akins's code?
 - `/Analysis/RamPressure/particletracking.py` has the particle tracking code, modified to add more documentation.
 
@@ -29,5 +30,5 @@ I'll make a proper README.md file later, but for now, this is a placeholder.
 The Merger Tree stuff for cpt marvel is in `TangosMergerTree.ipynb`.
 
 
-## Base
-- Has Yuma's plotting files
+## Base (Unused)
+- Has some of Yuma's plotting files
