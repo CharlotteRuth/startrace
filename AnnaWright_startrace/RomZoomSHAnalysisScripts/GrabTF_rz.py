@@ -24,7 +24,8 @@ def main(simpath, odir):
 
     ofile = os.path.join(odir, f"{simpath.split('/')[-2]}_tf.npy")
 
-    s = pynbody.load(simpath+simpath.split('/')[-2]+'.004096/'+simpath.split('/')[-2]+'.004096')
+    # s = pynbody.load(simpath+simpath.split('/')[-2]+'.004096/'+simpath.split('/')[-2]+'.004096')
+    s = pynbody.load(simpath)
     tf = s.s['tform'][s.s['tform']>0].in_units('Gyr')
     iord = s.s['iord'][s.s['tform']>0]
 
