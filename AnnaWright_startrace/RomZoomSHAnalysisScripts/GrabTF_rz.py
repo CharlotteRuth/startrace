@@ -22,7 +22,7 @@ def main(simpath, odir):
 #ofile = '/Users/Anna/Research/Outputs/M33Analogs/'+cursim+'_tf.npy'
 #simpath = '/Volumes/Audiobooks/RomZooms/'+cursim+'.romulus25.3072g1HsbBH/'
 
-    ofile = os.path.join(odir, f"{simpath.split('/')[-2]}_tf.npy")
+    ofile = os.path.join(odir, f"{simpath.split('/')[-1][:-7]}_tf.npy")
 
     # s = pynbody.load(simpath+simpath.split('/')[-2]+'.004096/'+simpath.split('/')[-2]+'.004096')
     s = pynbody.load(simpath)

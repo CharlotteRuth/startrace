@@ -45,13 +45,13 @@ for root, dirs, files in os.walk(base_path):
 
 import FindHaloStars as fhs
 
-def main(simpath, db_sim, odir, n_processes=4, overwrite=True):
+def main(simpath, cursim, db_sim, odir, n_processes=4, overwrite=True):
     pynbody.config['halo-class-priority'] = ['AmigaGrpCatalogue']
 
     # odir = '/Users/Anna/Research/Outputs/M33Analogs/MM/'+cursim+'/'
     # halostarsfile = '/Users/Anna/Research/Outputs/M33Analogs/'+cursim+'_tf.npy'
     # simpath = '/Volumes/Audiobooks/RomZooms/'+cursim+'.romulus25.3072g1HsbBH/'
-    cursim = simpath.split('/')[-2]
+    # cursim = simpath.split('/')[-2]
 
     fhs.odir = odir
     fhs.simpath = simpath
