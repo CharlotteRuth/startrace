@@ -58,7 +58,7 @@ def main(simpath, cursim, db_sim, odir, n_processes=4, overwrite=True):
     fhs.cursim = cursim
     fhs.db_sim = db_sim
     # halostarsfile = os.path.join(odir, f"{simpath.split('/')[-2]}_tf.npy")
-    halostarsfile = os.path.join(odir, f"{db_sim}_tf.npy")
+    halostarsfile = os.path.join(odir, f"{cursim}_tf.npy")
 
     dat = np.load(halostarsfile) # load in data
     fhs.dat = dat
