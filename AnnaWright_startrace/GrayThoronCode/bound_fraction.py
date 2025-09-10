@@ -3,6 +3,7 @@ import agama
 from scipy.stats import gaussian_kde
 import logging
 import matplotlib.pyplot as plt
+import tqdm.auto as tqdm
 
 # Configure root logger for Jupyter output
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
@@ -208,7 +209,7 @@ def _find_center_position(positions, masses, method='shrinking_sphere', **kwargs
     centroid = np.average(sample[idxs], axis=0)
     
     if method == 'density_peak':
-        print(f'Using the KDE center: {centroid}')
+        tqdm.tqdm.write(f'Using the KDE center: {centroid}')
         pos_c = positions - centroid
         dens = agama.Potential(type='Multipole', particles=(pos_c, masses), symmetry='n', lmax=kwargs.get('lmax', 8)).density(pos_c[:, :3])
         ## pick max of 1% particles or 20.
@@ -217,7 +218,7 @@ def _find_center_position(positions, masses, method='shrinking_sphere', **kwargs
 
         ## add the max dens loc to the original centroid
         centroid += np.average(pos_c[idxs], axis=0, weights=dens[idxs])
-        print(f'Density peak found at: {centroid}')
+        tqdm.tqdm.write(f'Density peak found at: {centroid}')
     
     else:
         logger = logging.getLogger('boundness')

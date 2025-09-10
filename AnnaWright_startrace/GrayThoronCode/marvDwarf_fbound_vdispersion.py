@@ -5,6 +5,9 @@ import pandas as pd
 from bound_fraction import compute_boundness_recursive_BFE
 from morphology import local_velocity_dispersion
 import astropy.units as u
+import tqdm.auto as tqdm
+import sys
+# from tqdm.contrib.logging import logging_redirect_tqdm
 
 def bound_fraction_task(results_df, dm_pos, dm_vel, dm_masses, star_pos, star_vel, star_masses, h5file, index_match=None):
     if index_match is None:
@@ -20,11 +23,12 @@ def bound_fraction_task(results_df, dm_pos, dm_vel, dm_masses, star_pos, star_ve
 
     for i in range(len(methods)+1):
         if i != len(methods):
-            print(f'Running method {i}')
+            tqdm.tqdm.write(f'Running method {i}')
             result = compute_boundness_recursive_BFE(
                 dm_pos,     dm_vel,     dm_masses,
                 star_pos,   star_vel,   star_masses, 
-                center_on=methods[i][0], center_vel_with_KDE=methods[i][1]
+                center_on=methods[i][0], center_vel_with_KDE=methods[i][1],
+                verbose=False
             )
             results.append(result)
             stri = f'_{i}'
@@ -81,10 +85,10 @@ def calc_fbound_veldisp(ids, dirpath = '', output_path='f_bound.csv'):
             'f_bound_part_dm_3', 'f_bound_mass_dm_3', 'f_bound_part_3', 'f_bound_mass_3', 
             'center_x_3', 'center_y_3', 'center_z_3', 'center_v_x_3', 'center_v_y_3', 'center_v_z_3'
         ]
-    )
+    ).astype({'snap': 'str'})
 
     with h5py.File(f'{dirpath}{idpath}.h5', 'r+') as data:
-        snaps = data['snaps']
+        snaps = data['snaps'].asstr()
         star_masses = np.asarray(data['star_mass'])
         dm_masses = np.asarray(data['dm_mass'])
         try:
@@ -101,34 +105,42 @@ def calc_fbound_veldisp(ids, dirpath = '', output_path='f_bound.csv'):
             data.create_dataset(f"star_bound_method{i}", star_masses.shape, dtype=int)
             data.create_dataset(f"dm_bound_method{i}", dm_masses.shape, dtype=int)
         
-    
-        for i in range(len(snaps)):
-            print(snaps[i])
+        # with logging_redirect_tqdm():
+        for i in tqdm.tqdm(range(len(snaps)), desc=f"Processing"):
+            tqdm.tqdm.write(str(snaps[i]))
             results_df.loc[i] = np.zeros(shape=57)*np.nan
             results_df.loc[i, 'snap'] = snaps[i]
             star_mass = star_masses[i]
-            if np.any(~np.isnan(star_mass)):
-                bound_fraction_task(
-                    results_df, 
-                    np.asarray(data['dm_pos'])[i], np.asarray(data['dm_vel'])[i], dm_masses[i], 
-                    np.asarray(data['star_pos'])[i][~np.isnan(star_mass)], 
-                    np.asarray(data['star_vel'])[i][~np.isnan(star_mass)], 
-                    star_mass[~np.isnan(star_mass)],
-                    data,
-                    index_match = ~np.isnan(star_mass)
-                )
-            else:
-                pass
+            
+            if not np.any(~np.isnan(star_mass)):
+                continue
+
+            bound_fraction_task(
+                results_df, 
+                np.asarray(data['dm_pos'])[i], np.asarray(data['dm_vel'])[i], dm_masses[i], 
+                np.asarray(data['star_pos'])[i][~np.isnan(star_mass)], 
+                np.asarray(data['star_vel'])[i][~np.isnan(star_mass)], 
+                star_mass[~np.isnan(star_mass)],
+                data,
+                index_match = ~np.isnan(star_mass)
+            )
             output = local_velocity_dispersion(
-                np.asarray(data['star_pos'])[i][~np.isnan(star_mass)]*u.kpc, 
-                np.asarray(data['star_vel'])[i][~np.isnan(star_mass)]*u.km/u.s, 
-                return_disps=True
+            np.asarray(data['star_pos'])[i][~np.isnan(star_mass)]*u.kpc, 
+            np.asarray(data['star_vel'])[i][~np.isnan(star_mass)]*u.km/u.s, 
+            return_disps=True
             )
             data['star_vel_dsp'][i][~np.isnan(star_mass)] = output[1]
             results_df.loc[i, 'vel_dispersion_16'] = output[0][0]
             results_df.loc[i, 'vel_dispersion_50'] = output[0][1]
             results_df.loc[i, 'vel_dispersion_84'] = output[0][2]
-    
+            
+
     results_df.to_csv(output_path)
-        
-calc_fbound_veldisp('storm.4096g5HbwK1BH_bn_4_2304_14_particle_data', dirpath='/home/graythoron/projects/marv_dwarf/marvel_dwarfs/')
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        print(f"Processing halo: {sys.argv[1]}")
+        # main(sys.argv[1]) 
+        # dirpath = '/home/ns1917/pynbody/stellarhalo_trace_aw/uw_boundfrac/'
+        dirpath = '/home/ns1917/gdrive/dwarf_volumes_data/'
+        calc_fbound_veldisp(f'storm.4096g5HbwK1BH_bn_4_{sys.argv[1]}_particle_data', dirpath=dirpath,output_path=f'{dirpath}storm.4096g5HbwK1BH_bn_4_{sys.argv[1]}_f_bound.csv')

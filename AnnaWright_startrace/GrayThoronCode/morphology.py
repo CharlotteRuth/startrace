@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import astropy.units as u
+import tqdm.auto as tqdm
 
 
 def calc_w_v_nat(pos, vel):
@@ -41,7 +42,7 @@ def local_velocity_dispersion(pos, vel, w_v=None, k=None, return_disps=False, ma
     # print off mode of calculation
     mode = 'serial' if (n_jobs_used is None) else f'parallel (n_jobs = {n_jobs_used})'
     endmsg = 'without chunking' if chunk > Npart else f'with chunksize {chunk}'
-    print(f"Computing in {mode} {endmsg}")
+    tqdm.tqdm.write(f"Computing in {mode} {endmsg}")
 
     # use code as if you're chunking, but if chunk > Npart it'll run just as fast
     start = 0
