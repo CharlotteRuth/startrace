@@ -25,11 +25,6 @@ from pynbody.array import SimArray
 import pandas as pd
 import tqdm.auto as tqdm
 
-def get_halo(snapshot, halo_number):
-    ts = db.get_timestep(f"{ss_dir}/%{snapshot}")
-    # print(f"Retrieved timestep: {ts}")
-    return ts.halos.filter_by(halo_number=int(halo_number)).first()
-
 # Simulation name and path
 if 'emu' in hostname:
     simpath = '/home/ns1917/tangos_sims/'
@@ -57,130 +52,66 @@ halo_particle_dict = {} # map iords to their unique host IDs
 for i, part in enumerate(partids):
     halo_particle_dict[part] = hostids[i]
 
-s = pynbody.load(ss_z0)
-h = s.halos(halo_numbers='v1')
-
 def main(idx):
-    # main_halo = get_halo('004096', int(idx))
-    mask = s.s['amiga.grp'] == int(idx)
-
-    # halo_numbers, dbids = main_halo.calculate_for_progenitors("halo_number()", "dbid()")
-    # snapshots = [db.get_halo(dbid).timestep.extension[-6:] for dbid in dbids]
-    # halo_snapshots_dict = {snapshot: halo_number for snapshot, halo_number in zip(snapshots, dbids)}
-    # halo_snapshots_dict.keys()
-
-    stars_to_consider = s.s['iord'][mask]
-    unique_starids = np.unique([halo_particle_dict[star] for star in stars_to_consider])
-    print(f"Number of unique star particles in the main halo: {len(unique_starids)}")
-    # idx = '2304_14'
-    # snapshot, halo_num = idx.split('_')
-    # halo_merger = get_halo(snapshot, int(halo_num))
-
-    # halo_starmask = hostids == idx
-    # all_star_iords = particle_ids[halo_starmask]
-    all_star_iords = np.sort(stars_to_consider)
-    # all_star_tform = pct[halo_starmask]
-
-    # ndm, halonums, dbids2 = halo_merger.calculate_for_progenitors('NDM()', 'halo_number()', 'dbid()')
-    # halo_dm_max = db.get_halo(dbids2[np.argmax(ndm)])
-
-    # get dark matter iords we want
-    # sim = pynbody.load(halo_dm_max.timestep.filename)
-    # mask = sim.dm['amiga.grp'] == int(halo_dm_max.halo_number)
-    # all_dm_iords = sim.dm['iord'][mask]
-
-    # timesteps_to_process = db.get_simulation(ss_dir).timesteps
-    # num_snaps = len(timesteps_to_process)
-    num_star_particles = len(all_star_iords)
-    # num_dm_particles = len(all_dm_iords)
-
-    # Use np.nan to fill arrays. This makes it clear if a particle was not present in a snapshot.
-    # star_iords = np.full((num_snaps, num_star_particles), np.nan)
-    star_pos = np.full((num_star_particles, 3), np.nan)
-    star_vel = np.full((num_star_particles, 3), np.nan)
-    star_mass = np.full((num_star_particles), np.nan)
-    star_massform = np.full((num_star_particles), np.nan)
-    star_age = np.full((num_star_particles), np.nan)
-    star_feh = np.full((num_star_particles), np.nan) # Using Fe/H as a single metallicity value
-
-    # dm_pos = np.full((num_snaps, num_dm_particles, 3), np.nan)
-    # dm_vel = np.full((num_snaps, num_dm_particles, 3), np.nan)
-    # dm_mass = np.full((num_snaps, num_dm_particles), np.nan)
-
-    # zs = np.zeros(num_snaps)
-    # snaps = [ts.extension for ts in timesteps_to_process]
-
-    # all_dm_iords = np.sort(all_dm_iords)
-
-    star_iord_map = {iord: k for k, iord in enumerate(all_star_iords)}
-    # dm_iord_map = {iord: k for k, iord in enumerate(all_dm_iords)}
-
-    # prev_time = 0
-    tstep = db.get_simulation(ss_dir).timesteps[-1]
-    # for i, tstep in enumerate(tqdm.tqdm(timesteps_to_process)):
-    s = pynbody.load(tstep.filename)
-    s.physical_units()
+    s = pynbody.load(ss_z0)
     h = s.halos(halo_numbers='v1')
+    mask = s.s['amiga.grp'] == int(idx)
+    mask2 = s.s['tform'] > 0
+    mask = mask & mask2
+    
+    stars_to_consider = s.s['iord'][mask] 
+    unique_starids = np.unique([halo_particle_dict[star] for star in stars_to_consider])
+    tqdm.write(f"Number of unique star particles in the main halo: {len(stars_to_consider)}")
+    tqdm.write(f"Number of unique host halos these stars formed in: {(unique_starids)}")
 
-    # halo = db.get_halo(halo_snapshots_dict[tstep.extension[-6:]])
-    halo = get_halo('004096', int(idx))
-    print(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
-    # zs = s.properties['z']
+    all_star_iords = np.sort(stars_to_consider)
+    num_star_particles = len(all_star_iords)
+
+    tstep = db.get_simulation(ss_dir).timesteps[-1]
+    s.physical_units()
+    tqdm.write(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
+
     # Center the whole simulation on the halo of interest.
-    pynbody.analysis.halo.center(h[halo.halo_number], vel=True)
-    print(f"Centered on halo: {halo.halo_number}")
+    pynbody.analysis.halo.center(h[int(idx)], vel=True)
+    tqdm.write(f"Centered on halo: {idx}")
 
-    # stars_present_mask = pynbody.filt.HighPass('tform', prev_time)
     subs = s.s[np.isin(s.s['iord'], all_star_iords)]
     iords_in_subs = np.array(subs['iord'])
-    k_indices_star = np.array([star_iord_map[iord] for iord in iords_in_subs])
 
-    if len(k_indices_star) > 0:
-        star_pos[k_indices_star, :] = subs['pos']
-        star_vel[k_indices_star, :] = subs['vel']
-        star_mass[k_indices_star] = subs['mass']
-        star_massform[k_indices_star] = subs['massform']
-        star_age[k_indices_star] = subs['age']
-        star_feh[k_indices_star] = subs['feh']
-    # if any star_age is negative, set to zero
-    star_age[star_age < 0] = 0
-    print(f"Processed {len(k_indices_star)} star particles in snapshot {tstep.extension[-6:]}")
+    star_uid = [halo_particle_dict[i] for i in iords_in_subs]
+    star_pos = subs['pos']
+    star_vel = subs['vel']
+    star_mass = subs['mass']
+    star_massform = subs['massform']
+    star_age = subs['age']
+    star_feh = subs['feh']
+    star_oxh = subs['oxh']
+    tqdm.write(f"Processed {len(iords_in_subs)} star particles in snapshot {tstep.extension[-6:]}")
 
-    # subd = s.dm[np.isin(s.dm['iord'], all_dm_iords)]
-    # iords_in_subd = np.array(subd['iord'])
-    # k_indices_dm = np.array([dm_iord_map[iord] for iord in iords_in_subd])
-    # if len(k_indices_dm) > 0:
-    #     dm_pos[i, k_indices_dm, :] = subd['pos']
-    #     dm_vel[i, k_indices_dm, :] = subd['vel']
-    #     dm_mass[i, k_indices_dm] = subd['mass']
-    # print(f"Processed {len(k_indices_dm)} DM particles in snapshot {tstep.extension[-6:]}")
-    # prev_time = tstep.time_gyr
-
-    output_filename = os.path.join(outfile_dir, f"ananke_{basename}_{idx}_data.h5")
+    output_filename = os.path.join(outfile_dir, 'ananke', f"ananke_{basename}_{idx}_data.h5")
 
     with h5py.File(output_filename, 'w') as f:
-        # f.create_dataset('snaps', data=np.bytes_(snaps))
-        # f.create_dataset('zs', data=zs)
-
         # Star data
-        f.create_dataset('star_iords', data=all_star_iords)
+        f.create_dataset('star_iords', data=iords_in_subs)
+        f.create_dataset('star_uid', data=star_uid)#, dtype=h5py.string_dtype(encoding='utf-8'))
         f.create_dataset('star_pos', data=star_pos)
         f.create_dataset('star_vel', data=star_vel)
         f.create_dataset('star_mass', data=star_mass)
         f.create_dataset('star_massform', data=star_massform)
         f.create_dataset('star_age', data=star_age)
         f.create_dataset('star_feh', data=star_feh)
-
-        # # DM data
-        # f.create_dataset('dm_iords', data=all_dm_iords)
-        # f.create_dataset('dm_pos', data=dm_pos)
-        # f.create_dataset('dm_vel', data=dm_vel)
-        # f.create_dataset('dm_mass', data=dm_mass)
-
-    print("Done.")
+        f.create_dataset('star_oxh', data=star_oxh)
+    tqdm.write("Done.")
     return output_filename
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        print(f"Processing halo: {sys.argv[1]}")
+    if len(sys.argv) == 2:
+        tqdm.write(f"Processing halo: {sys.argv[1]}")
         main(sys.argv[1])
+    elif len(sys.argv) > 2:
+        for arg in tqdm.tqdm(sys.argv[1:]):
+            tqdm.write(f"Processing halo: {arg}")
+            main(arg)
+    else:
+        print("No halo index provided. Exiting.")
+        sys.exit(1)
