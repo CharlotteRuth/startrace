@@ -4,8 +4,8 @@ import socket
 hostname = socket.gethostname()
 if 'emu' in hostname:
     os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/tangos_sims/'
-    # os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/Databases/Marvel_BN_N10.db'
-    os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/pynbody/Tangos/Marvel_BN_N10.db'
+    os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/Databases/Marvel_BN_N10.db'
+    # os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/pynbody/Tangos/Marvel_BN_N10.db'
     os.chdir('/home/ns1917/pynbody/AnnaWright_startrace/')
 else: # grinnell
     os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
@@ -59,8 +59,10 @@ for i, part in enumerate(partids):
 
 s = pynbody.load(ss_z0)
 h = s.halos(halo_numbers='v1')
-main_halo = get_halo('004096', 4)
+main_halo = get_halo('004096', 3) #! change
 mask = s.s['amiga.grp'] == main_halo.halo_number
+mask2 = s.s['tform'] > 0
+mask = mask & mask2
 
 halo_numbers, dbids = main_halo.calculate_for_progenitors("halo_number()", "dbid()")
 snapshots = [db.get_halo(dbid).timestep.extension[-6:] for dbid in dbids]
@@ -89,6 +91,8 @@ def main(idx):
     all_dm_iords = sim.dm['iord'][mask]
 
     timesteps_to_process = db.get_simulation(ss_dir).timesteps
+    # if '000192' in timesteps_to_process, remove it
+    timesteps_to_process = [ts for ts in timesteps_to_process if ts.extension[-6:] != '000192']
     num_snaps = len(timesteps_to_process)
     num_star_particles = len(all_star_iords)
     num_dm_particles = len(all_dm_iords)
@@ -151,7 +155,10 @@ def main(idx):
         print(f"Processed {len(k_indices_dm)} DM particles in snapshot {tstep.extension[-6:]}")
         prev_time = tstep.time_gyr
 
-    output_filename = os.path.join(outfile_dir, 'uw_boundfrac', f"{ss_dir}_{main_halo.halo_number}_{idx}_particle_data.h5")
+    output_filename = os.path.join(outfile_dir, 'uw_boundfrac', str(main_halo.halo_number), f"{ss_dir}_{main_halo.halo_number}_{idx}_particle_data.h5")
+    if not os.path.exists(os.path.dirname(output_filename)):
+        os.makedirs(os.path.dirname(output_filename))
+    print(f"Saving data to {output_filename}")
 
     with h5py.File(output_filename, 'w') as f:
         f.create_dataset('snaps', data=np.bytes_(snaps))
@@ -175,6 +182,13 @@ def main(idx):
     return output_filename
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        print(f"Processing halo: {sys.argv[1]}")
+    if len(sys.argv) == 2:
+        tqdm.tqdm.write(f"Processing halo: {sys.argv[1]}")
         main(sys.argv[1])
+    elif len(sys.argv) > 2:
+        for arg in tqdm.tqdm(sys.argv[1:]):
+            tqdm.tqdm.write(f"Processing halo: {arg}")
+            main(arg)
+    else:
+        print("No halo index provided. Exiting.")
+        sys.exit(1)

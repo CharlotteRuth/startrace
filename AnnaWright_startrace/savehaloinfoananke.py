@@ -53,6 +53,7 @@ for i, part in enumerate(partids):
     halo_particle_dict[part] = hostids[i]
 
 def main(idx):
+    tqdm.tqdm.write(f"Starting processing for halo: {idx}")
     s = pynbody.load(ss_z0)
     h = s.halos(halo_numbers='v1')
     mask = s.s['amiga.grp'] == int(idx)
@@ -61,19 +62,19 @@ def main(idx):
     
     stars_to_consider = s.s['iord'][mask] 
     unique_starids = np.unique([halo_particle_dict[star] for star in stars_to_consider])
-    tqdm.write(f"Number of unique star particles in the main halo: {len(stars_to_consider)}")
-    tqdm.write(f"Number of unique host halos these stars formed in: {(unique_starids)}")
-
+    tqdm.tqdm.write(f"Number of unique star particles in the main halo: {len(stars_to_consider)}")
+    tqdm.tqdm.write(f"Number of unique host halos these stars formed in: {(unique_starids)}")
+    # pbar update 2?
     all_star_iords = np.sort(stars_to_consider)
     num_star_particles = len(all_star_iords)
 
     tstep = db.get_simulation(ss_dir).timesteps[-1]
     s.physical_units()
-    tqdm.write(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
+    tqdm.tqdm.write(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
 
     # Center the whole simulation on the halo of interest.
     pynbody.analysis.halo.center(h[int(idx)], vel=True)
-    tqdm.write(f"Centered on halo: {idx}")
+    tqdm.tqdm.write(f"Centered on halo: {idx}")
 
     subs = s.s[np.isin(s.s['iord'], all_star_iords)]
     iords_in_subs = np.array(subs['iord'])
@@ -86,7 +87,7 @@ def main(idx):
     star_age = subs['age']
     star_feh = subs['feh']
     star_oxh = subs['oxh']
-    tqdm.write(f"Processed {len(iords_in_subs)} star particles in snapshot {tstep.extension[-6:]}")
+    tqdm.tqdm.write(f"Processed {len(iords_in_subs)} star particles in snapshot {tstep.extension[-6:]}")
 
     output_filename = os.path.join(outfile_dir, 'ananke', f"ananke_{basename}_{idx}_data.h5")
 
@@ -101,16 +102,16 @@ def main(idx):
         f.create_dataset('star_age', data=star_age)
         f.create_dataset('star_feh', data=star_feh)
         f.create_dataset('star_oxh', data=star_oxh)
-    tqdm.write("Done.")
+    tqdm.tqdm.write("Done.")
     return output_filename
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
-        tqdm.write(f"Processing halo: {sys.argv[1]}")
+        tqdm.tqdm.write(f"Processing halo: {sys.argv[1]}")
         main(sys.argv[1])
     elif len(sys.argv) > 2:
         for arg in tqdm.tqdm(sys.argv[1:]):
-            tqdm.write(f"Processing halo: {arg}")
+            tqdm.tqdm.write(f"Processing halo: {arg}")
             main(arg)
     else:
         print("No halo index provided. Exiting.")

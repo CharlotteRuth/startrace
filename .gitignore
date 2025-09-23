@@ -213,3 +213,5 @@ stellarhalo_trace_aw/storm*
 stellarhalo_trace_aw/cptmarvel.cosmo25cmb.4096g5HbwK1BH_halo1_dm.h5
 stellarhalo_trace_aw/uw_boundfrac/*
 stellarhalo_trace_aw/ananke*
+stellarhalo_trace_aw/*.npy
+stellarhalo_trace_aw/elektra.cosmo25cmb.4096g5HbwK1BH_allhalostardata_upd.h5
