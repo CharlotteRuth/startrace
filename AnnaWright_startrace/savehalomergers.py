@@ -38,8 +38,9 @@ else:
     simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
     outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
 
-basename = 'storm.cosmo25cmb.4096g5HbwK1BH'
-ss_dir = 'storm.4096g5HbwK1BH_bn'
+simname = 'storm'
+basename = f'{simname}.cosmo25cmb.4096g5HbwK1BH'
+ss_dir = f'{simname}.4096g5HbwK1BH_bn'
 sim_base = simpath + ss_dir + '/'
 ss_z0 = sim_base + basename + '.004096'
 
@@ -59,7 +60,7 @@ for i, part in enumerate(partids):
 
 s = pynbody.load(ss_z0)
 h = s.halos(halo_numbers='v1')
-main_halo = get_halo('004096', 3) #! change
+main_halo = get_halo('004096', 8) #! change
 mask = s.s['amiga.grp'] == main_halo.halo_number
 mask2 = s.s['tform'] > 0
 mask = mask & mask2
