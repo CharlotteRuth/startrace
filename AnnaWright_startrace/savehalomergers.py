@@ -60,7 +60,7 @@ for i, part in enumerate(partids):
 
 s = pynbody.load(ss_z0)
 h = s.halos(halo_numbers='v1')
-main_halo = get_halo('004096', 8) #! change
+main_halo = get_halo('004096', 1) #! change
 mask = s.s['amiga.grp'] == main_halo.halo_number
 mask2 = s.s['tform'] > 0
 mask = mask & mask2
@@ -76,6 +76,7 @@ print(f"Number of unique star particles in the main halo: {len(unique_starids)}"
 
 def main(idx):
     # idx = '2304_14'
+    print('Main halo:', main_halo.halo_number)
     snapshot, halo_num = idx.split('_')
     halo_merger = get_halo(snapshot, int(halo_num))
 
@@ -156,7 +157,7 @@ def main(idx):
         print(f"Processed {len(k_indices_dm)} DM particles in snapshot {tstep.extension[-6:]}")
         prev_time = tstep.time_gyr
 
-    output_filename = os.path.join(outfile_dir, 'uw_boundfrac', str(main_halo.halo_number), f"{ss_dir}_{main_halo.halo_number}_{idx}_particle_data.h5")
+    output_filename = os.path.join(outfile_dir, 'uw_boundfrac', simname, str(main_halo.halo_number), f"{ss_dir}_{main_halo.halo_number}_{idx}_particle_data.h5")
     if not os.path.exists(os.path.dirname(output_filename)):
         os.makedirs(os.path.dirname(output_filename))
     print(f"Saving data to {output_filename}")

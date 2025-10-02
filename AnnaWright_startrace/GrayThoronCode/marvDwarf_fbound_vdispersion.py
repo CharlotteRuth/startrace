@@ -138,18 +138,21 @@ def calc_fbound_veldisp(ids, dirpath = '', output_path='f_bound.csv'):
     results_df.to_csv(output_path)
 
 if __name__ == "__main__":
-    halo = 2
+
+    halo = 5
+    name = 'elektra'
+    
     if len(sys.argv) == 2:
         print(f"Processing halo: {sys.argv[1]}")
         # main(sys.argv[1]) 
         # dirpath = f'/home/ns1917/pynbody/stellarhalo_trace_aw/uw_boundfrac/{halo}/'
-        dirpath = f'/home/ns1917/gdrive/boundfrac/storm/{halo}/'
-        calc_fbound_veldisp(f'storm.4096g5HbwK1BH_bn_{halo}_{sys.argv[1]}_particle_data', dirpath=dirpath,output_path=f'{dirpath}storm.4096g5HbwK1BH_bn_{halo}_{sys.argv[1]}_f_bound.csv')
+        dirpath = f'/home/ns1917/gdrive/boundfrac/{name}/{halo}/'
+        calc_fbound_veldisp(f'{name}.4096g5HbwK1BH_bn_{halo}_{sys.argv[1]}_particle_data', dirpath=dirpath,output_path=f'{dirpath}{name}.4096g5HbwK1BH_bn_{halo}_{sys.argv[1]}_f_bound.csv')
     elif len(sys.argv) > 2:
         for arg in tqdm.tqdm(sys.argv[1:]):
             print(f"Processing halo: {arg}")
-            dirpath = f'/home/ns1917/gdrive/boundfrac/storm/{halo}/'
-            calc_fbound_veldisp(f'storm.4096g5HbwK1BH_bn_{halo}_{arg}_particle_data', dirpath=dirpath,output_path=f'{dirpath}storm.4096g5HbwK1BH_bn_{halo}_{arg}_f_bound.csv')
+            dirpath = f'/home/ns1917/gdrive/boundfrac/{name}/{halo}/'
+            calc_fbound_veldisp(f'{name}.4096g5HbwK1BH_bn_{halo}_{arg}_particle_data', dirpath=dirpath,output_path=f'{dirpath}{name}.4096g5HbwK1BH_bn_{halo}_{arg}_f_bound.csv')
     else:
         print("No halo index provided. Exiting.")
         sys.exit(1)
