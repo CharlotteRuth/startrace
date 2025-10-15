@@ -29,11 +29,12 @@ import tqdm.auto as tqdm
 if 'emu' in hostname:
     simpath = '/home/ns1917/tangos_sims/'
     outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
+    out2dir = "/home/ns1917/gdrive/ananke/"
 else:
     simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
     outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
 
-simname = 'elektra'
+simname = 'storm'
 basename = f'{simname}.cosmo25cmb.4096g5HbwK1BH'
 ss_dir = f'{simname}.4096g5HbwK1BH_bn'
 sim_base = simpath + ss_dir + '/'
@@ -57,11 +58,19 @@ def main(idx):
     tqdm.tqdm.write(f"Starting processing for halo: {idx}")
     s = pynbody.load(ss_z0)
     h = s.halos(halo_numbers='v1')
-    mask = s.s['amiga.grp'] == int(idx)
-    mask2 = s.s['tform'] > 0
-    mask = mask & mask2
     
-    stars_to_consider = s.s['iord'][mask] 
+    # Center the whole simulation on the halo of interest.
+    pynbody.analysis.halo.center(h[int(idx)], vel=True)
+    rvir = h[int(idx)].properties['Rvir']
+    cen = [0, 0, 0]  # Center is at origin after centering
+    sp = s[pynbody.filt.Sphere(SimArray([rvir], "kpc"), cen)].load_copy() # only show particles in the specified sphere
+    sp.physical_units()
+    tqdm.tqdm.write(f"Centered on halo: {idx}")
+
+    # mask = s.s['amiga.grp'] == int(idx)
+    mask = sp.s['tform'] > 0
+    # mask = mask & mask2
+    stars_to_consider = sp.s['iord'][mask] 
     unique_starids = np.unique([halo_particle_dict[star] for star in stars_to_consider])
     tqdm.tqdm.write(f"Number of unique star particles in the main halo: {len(stars_to_consider)}")
     tqdm.tqdm.write(f"Number of unique host halos these stars formed in: {(unique_starids)}")
@@ -70,14 +79,10 @@ def main(idx):
     num_star_particles = len(all_star_iords)
 
     tstep = db.get_simulation(ss_dir).timesteps[-1]
-    s.physical_units()
+    # s.physical_units()
     tqdm.tqdm.write(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
 
-    # Center the whole simulation on the halo of interest.
-    pynbody.analysis.halo.center(h[int(idx)], vel=True)
-    tqdm.tqdm.write(f"Centered on halo: {idx}")
-
-    subs = s.s[np.isin(s.s['iord'], all_star_iords)]
+    subs = sp.s[np.isin(sp.s['iord'], all_star_iords)]
     iords_in_subs = np.array(subs['iord'])
 
     star_uid = [halo_particle_dict[i] for i in iords_in_subs]
@@ -89,8 +94,8 @@ def main(idx):
     star_feh = subs['feh']
     star_oxh = subs['oxh']
     tqdm.tqdm.write(f"Processed {len(iords_in_subs)} star particles in snapshot {tstep.extension[-6:]}")
-
-    output_filename = os.path.join(outfile_dir, 'ananke', f"ananke_{basename}_{idx}_data.h5")
+    # print(np.unique(star_uid, return_counts=True))
+    output_filename = os.path.join(outfile_dir, 'ananke', simname, f"ananke_{basename}_{idx}_data.h5")
 
     with h5py.File(output_filename, 'w') as f:
         # Star data
@@ -115,5 +120,5 @@ if __name__ == "__main__":
             tqdm.tqdm.write(f"Processing halo: {arg}")
             main(arg)
     else:
-        print("No halo index provided. Exiting.")
+        print("Usage: python savehaloinfoananke.py <halo_index1> <halo_index2> ...")
         sys.exit(1)
