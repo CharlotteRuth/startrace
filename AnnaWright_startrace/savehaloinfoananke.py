@@ -34,7 +34,7 @@ else:
     simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
     outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
 
-simname = 'storm'
+simname = 'elektra'
 basename = f'{simname}.cosmo25cmb.4096g5HbwK1BH'
 ss_dir = f'{simname}.4096g5HbwK1BH_bn'
 sim_base = simpath + ss_dir + '/'
