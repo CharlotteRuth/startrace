@@ -123,6 +123,10 @@ def make_colormap(unique_haloids):
     color_map = {hid: colors(i) for i, hid in enumerate(unique_haloids)}
     return color_map
 
+def get_halo(snapshot, halo_number):
+    ts = db.get_timestep(f"{ss_dir}/%{snapshot}")
+    # print(f"Retrieved timestep: {ts}")
+    return ts.halos.filter_by(halo_number=int(halo_number)).first()
 
 # Simulation name and path
 if 'emu' in hostname:
@@ -148,7 +152,7 @@ halos_with_stars = [h for h in all_halos if h.NStar > 0 and h['Mvir'] > 1e9]
 
 
 # Read in data from Anna's pipeline
-with h5py.File(outfile_dir+'/'+basename+'_allhalostardata.h5','r') as f:
+with h5py.File(outfile_dir+'/'+basename+'_allhalostardata_upd.h5','r') as f:
     hostids = f['host_IDs'].asstr()[:] # unique host IDs
     partids = f['particle_IDs'][:] # iords
     pct = f['particle_creation_times'][:] # formation times
@@ -217,7 +221,7 @@ def main(num):
         # First timestep
         if i == 0:
             #! NOT USING Reproduce unique color map seed
-            rng = np.random.default_rng(num) 
+            rng = np.random.default_rng(num*2+1) 
             uIDs_shuffled = rng.permutation(uIDs)
             tqdm.tqdm.write(str(uIDs_shuffled))
             colormap = make_colormap(uIDs_shuffled)

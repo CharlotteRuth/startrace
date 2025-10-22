@@ -38,7 +38,7 @@ else:
     simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
     outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
 
-simname = 'storm'
+simname = 'rogue'
 basename = f'{simname}.cosmo25cmb.4096g5HbwK1BH'
 ss_dir = f'{simname}.4096g5HbwK1BH_bn'
 sim_base = simpath + ss_dir + '/'
@@ -60,7 +60,7 @@ for i, part in enumerate(partids):
 
 s = pynbody.load(ss_z0)
 h = s.halos(halo_numbers='v1')
-main_halo = get_halo('004096', 1) #! change
+main_halo = get_halo('004096', 5) #! change
 mask = s.s['amiga.grp'] == main_halo.halo_number
 mask2 = s.s['tform'] > 0
 mask = mask & mask2
@@ -94,7 +94,7 @@ def main(idx):
 
     timesteps_to_process = db.get_simulation(ss_dir).timesteps
     # if '000192' in timesteps_to_process, remove it
-    timesteps_to_process = [ts for ts in timesteps_to_process if ts.extension[-6:] != '000192']
+    # timesteps_to_process = [ts for ts in timesteps_to_process if ts.extension[-6:] != '000192']
     num_snaps = len(timesteps_to_process)
     num_star_particles = len(all_star_iords)
     num_dm_particles = len(all_dm_iords)
