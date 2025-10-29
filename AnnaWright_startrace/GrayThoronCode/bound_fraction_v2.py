@@ -4,9 +4,10 @@ from typing import Any
 import sys
 import numpy as np
 import pyfalcon
+import tqdm.auto as tqdm
 import agama
 agama.setUnits(mass=1, length=1, velocity=1)
-print('import successful')
+tqdm.tqdm.write('import successful')
 # # 1. Create a custom handler that flushes after every log record is emitted
 class _LiveLogHandler(logging.StreamHandler):
     """
@@ -378,7 +379,7 @@ def _find_center_position(
     centroid = np.average(sample[idxs], axis=0)
     
     if method == 'density_peak':
-        print(f'Using the KDE center: {centroid}')
+        tqdm.tqdm.write(f'Using the KDE center: {centroid}')
         pos_c = positions - centroid
 
         dens = agama.Potential(type='Multipole', particles=(pos_c, masses), symmetry='n', lmax=kwargs.get('lmax', 8)).density(pos_c[:, :3])
@@ -389,7 +390,7 @@ def _find_center_position(
 
         ## add the max dens loc to the original centroid
         centroid += np.average(pos_c[idxs], axis=0, weights=dens[idxs])
-        print(f'Density peak found at: {centroid}')
+        tqdm.tqdm.write(f'Density peak found at: {centroid}')
     
     else:
         logger.info(f"Returning the KDE center.")

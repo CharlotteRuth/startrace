@@ -1,6 +1,5 @@
 """
-
-
+Add docstrings at some point
 """
 #Bound fraction to Marvelous Dwarfs
 import h5py
@@ -118,7 +117,7 @@ def calc_fbound_veldisp(ids, dirpath = '', output_path='f_bound.csv'):
             results_df.loc[i, 'snap'] = snaps[i]
             star_mass = star_masses[i]
             
-            if not np.any(~np.isnan(star_mass)):
+            if not np.sum(~np.isnan(star_mass)) > 10:
                 continue
 
             bound_fraction_task(
@@ -169,8 +168,16 @@ if __name__ == "__main__":
 
     dirpath = f'/home/ns1917/gdrive/boundfrac/{name}/{halo}/'
 
-    for arg in tqdm.tqdm(args.snap_ids, desc="Processing snapshots"):
+    # Use tqdm only if processing multiple snapshots
+    if len(args.snap_ids) == 1:
+        arg = args.snap_ids[0]
         print(f"Processing snapshot: {arg}")
         calc_fbound_veldisp(f'{name}.4096g5HbwK1BH_bn_{halo}_{arg}_particle_data',
                             dirpath=dirpath,
                             output_path=f'{dirpath}{name}.4096g5HbwK1BH_bn_{halo}_{arg}_f_bound.csv')
+    else:
+        for arg in tqdm.tqdm(args.snap_ids, desc="Processing snapshots"):
+            print(f"Processing snapshot: {arg}")
+            calc_fbound_veldisp(f'{name}.4096g5HbwK1BH_bn_{halo}_{arg}_particle_data',
+                                dirpath=dirpath,
+                                output_path=f'{dirpath}{name}.4096g5HbwK1BH_bn_{halo}_{arg}_f_bound.csv')

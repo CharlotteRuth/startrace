@@ -52,6 +52,7 @@ import glob
 from pynbody.array import SimArray
 import pandas as pd
 import tqdm.auto as tqdm
+from createanimation import create_animation_with_padding, create_animation_simple
 
 def setup_paths(simname):
     """Configure simulation paths based on hostname and simulation name.
@@ -264,7 +265,7 @@ def get_halo(snapshot, halo_number, ss_dir):
     # print(f"Retrieved timestep: {ts}")
     return ts.halos.filter_by(halo_number=int(halo_number)).first()
 
-def main(num, simname, overwrite=False):
+def main(num, simname, overwrite=False, create_animation=False):
     """Generate merger history plots for a specific halo.
     
     Args:
@@ -394,6 +395,17 @@ def main(num, simname, overwrite=False):
         plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad/(np.sqrt(2)*4), save_path3) # more zoomed
         pbar.update(1)
 
+    else:
+        if create_animation:
+            for folder_path in save_bases:
+                base_name = os.path.basename(folder_path)
+                output_gif_path = os.path.join(outfile_dir, 'merge_plots', f'{base_name}_animation.gif')
+                output_mp4_path = os.path.join(outfile_dir, 'merge_plots', f'{base_name}_animation.mp4')
+
+                # create_animation_simple(folder_path, output_gif_path, fps=12)
+                create_animation_with_padding(folder_path, output_mp4_path, fps=6)
+                tqdm.tqdm.write(f"Created animation: {output_gif_path}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -411,6 +423,8 @@ Examples:
   
   # Short form with overwrite flag
   python plothalomergers.py -n elektra -o 2 3
+  
+  # Note: it is generally better to run it one halo at a time to avoid memory issues.
 
 Output:
   Creates three versions of each plot with different zoom levels:
@@ -438,12 +452,19 @@ Output:
         type=int,
         help='One or more halo numbers to process'
     )
-    
+    # new arg to automatically create animations
+    parser.add_argument(
+        '-a', '--create-animation',
+        action='store_true',
+        help="Create animations from the generated plots (default: False)"
+    )
+
     args = parser.parse_args()
     
     simname = args.name
     overwrite = args.overwrite
-    
+    create_animation = args.create_animation
+
     for halo_num in args.halo_numbers:
         tqdm.tqdm.write(f"Processing halo: {halo_num} from {simname} simulation")
-        main(halo_num, simname, overwrite)
+        main(halo_num, simname, overwrite, create_animation)
