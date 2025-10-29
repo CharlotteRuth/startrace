@@ -1,6 +1,35 @@
+"""
+plothalomergers.py
+
+Plot stellar halo merger histories from cosmological simulations.
+
+This script generates time-series visualizations of stellar halo mergers by
+tracking star particles from different progenitor halos across simulation
+snapshots. It creates three 2D projection plots (XY, YZ, XZ) colored by
+original host halo ID, showing how satellite galaxies merge into the main
+halo over cosmic time.
+
+The script uses the Tangos database to track halo properties and pynbody
+for particle data analysis. It produces multiple zoom levels to capture
+both large-scale and detailed structure.
+
+Author: Nithun Selva
+Date: 2025
+Usage:
+    # Plot merger history for halo 4 in storm simulation
+    python plothalomergers.py --name storm 4
+    
+    # Plot multiple halos from rogue simulation with overwrite enabled
+    python plothalomergers.py -n rogue --overwrite 1 7 12
+    
+    # Show help
+    python plothalomergers.py --help
+"""
+
 import os
 import sys
 import socket
+import argparse
 hostname = socket.gethostname()
 if 'emu' in hostname:
     os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/tangos_sims/'
@@ -56,6 +85,8 @@ def load_halo_data(outfile_dir, basename):
     
     Returns:
         dict: Dictionary mapping particle IDs to their unique host IDs
+        list: List of unique host IDs
+        list: List of particle IDs
     """
     with h5py.File(outfile_dir+'/'+basename+'_allhalostardata_upd.h5','r') as f:
         hostids = f['host_IDs'].asstr()[:]  # unique host IDs
@@ -71,7 +102,53 @@ def load_halo_data(outfile_dir, basename):
     for i, part in enumerate(partids):
         halo_particle_dict[part] = hostids[i]
     
-    return halo_particle_dict
+    return halo_particle_dict, hostids, partids
+
+def initialize_simulation_data(simname):
+    """Initialize simulation paths and load halo particle data.
+    
+    Args:
+        simname (str): Name of simulation ('storm', 'elektra', 'rogue', or 'cptmarvel')
+    
+    Returns:
+        tuple: (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0, 
+                halo_particle_dict, all_timesteps, halos_stars_dict)
+    """
+    (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0) = setup_paths(simname)
+
+    timestep = db.get_timestep(ss_dir+'/%'+str(4096))
+    all_halos = timestep.halos.all()
+    tqdm.tqdm.write("There are %d halos in the snapshot." % len(all_halos))
+
+    # Filter for halos with stars
+    halos_with_stars = [h for h in all_halos if h.NStar > 0 and h['Mvir'] > 1e9]
+    # for halo in halos_with_stars:
+        # tqdm.tqdm.write("Halo ID: %s, Mass: %1.2eM☉, Stars: %d" % (halo.halo_number, halo['Mvir'], halo.NStar))
+
+    # Read in data from Anna's pipeline
+    halo_particle_dict, hostids, partids = load_halo_data(outfile_dir, basename)
+
+    all_timesteps = db.get_simulation(ss_dir).timesteps
+    halos_stars_dict = {}
+    for timestep in all_timesteps:
+        # Get all halos in the current timestep with stars
+        # Kinda overkill, since we only need ones at 4096 for now
+        # tqdm.tqdm.write(f'Processing timestep: {timestep.extension[-6:]}')
+        halos_stars_dict[timestep.extension[-6:]] = [h for h in timestep.halos.all() if h.NStar > 0]
+    tqdm.tqdm.write('Created halos dictionary')
+
+    # Since we center the plot on shrink_center, test for its existence
+    all_timesteps = db.get_simulation(ss_dir).timesteps
+    # all_timesteps = all_timesteps[:15]
+    for timestep in all_timesteps:
+        halo2 = timestep.halos.all()[1]
+        try:
+            halo2['shrink_center']
+        except:
+            tqdm.tqdm.write(timestep.extension[-6:])#, 'does not have shrink_center')
+    
+    return (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0, 
+            halo_particle_dict, all_timesteps, halos_stars_dict, hostids, partids)
 
 def plot_halo_mergers(sp,mask,haloids,color_map,timestep,rad=None,savepath=None):
     """Plots stellar positions from a simulation in three 2D projections.
@@ -172,69 +249,37 @@ def make_colormap(unique_haloids):
     color_map = {hid: colors(i) for i, hid in enumerate(unique_haloids)}
     return color_map
 
-def get_halo(snapshot, halo_number):
+def get_halo(snapshot, halo_number, ss_dir):
+    """Retrieve a specific halo from a snapshot using Tangos database.
+    
+    Args:
+        snapshot (str): Snapshot identifier (e.g., '004096')
+        halo_number (int): Halo number within the snapshot
+        ss_dir (str): Simulation directory name
+    
+    Returns:
+        tangos.core.halo.Halo: The requested halo object
+    """
     ts = db.get_timestep(f"{ss_dir}/%{snapshot}")
     # print(f"Retrieved timestep: {ts}")
     return ts.halos.filter_by(halo_number=int(halo_number)).first()
 
-# Simulation name and path
-if 'emu' in hostname:
-    simpath = '/home/ns1917/tangos_sims/'
-    outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
-else:
-    simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
-    outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
-
-basename = 'rogue.cosmo25cmb.4096g5HbwK1BH'
-ss_dir = 'rogue.4096g5HbwK1BH_bn'
-sim_base = simpath + ss_dir + '/'
-ss_z0 = sim_base + basename + '.004096'
-
-timestep = db.get_timestep(ss_dir+'/%'+str(4096))
-all_halos = timestep.halos.all()
-tqdm.tqdm.write("There are %d halos in the snapshot." % len(all_halos))
-
-# Filter for halos with stars
-halos_with_stars = [h for h in all_halos if h.NStar > 0 and h['Mvir'] > 1e9]
-# for halo in halos_with_stars:
-    # tqdm.tqdm.write("Halo ID: %s, Mass: %1.2eM☉, Stars: %d" % (halo.halo_number, halo['Mvir'], halo.NStar))
-
-
-# Read in data from Anna's pipeline
-with h5py.File(outfile_dir+'/'+basename+'_allhalostardata_upd.h5','r') as f:
-    hostids = f['host_IDs'].asstr()[:] # unique host IDs
-    partids = f['particle_IDs'][:] # iords
-    pct = f['particle_creation_times'][:] # formation times
-    ph = f['particle_hosts'][:] # local host IDs (i.e., host at formation time)
-    pp = f['particle_positions'][:] # position at formation time
-    tsloc = f['timestep_location'][:] # snapshot where star particle first appears
-uIDs = np.unique(hostids)
-
-halo_particle_dict = {} # map iords to their unique host IDs
-for i, part in enumerate(partids):
-    halo_particle_dict[part] = hostids[i]
-
-all_timesteps = db.get_simulation(ss_dir).timesteps
-halos_stars_dict = {}
-for timestep in all_timesteps:
-    # Get all halos in the current timestep with stars
-    # Kinda overkill, since we only need ones at 4096 for now
-    # tqdm.tqdm.write(f'Processing timestep: {timestep.extension[-6:]}')
-    halos_stars_dict[timestep.extension[-6:]] = [h for h in timestep.halos.all() if h.NStar > 0]
-tqdm.tqdm.write('Created halos dictionary')
-
-# Since we center the plot on shrink_center, test for its existence
-all_timesteps = db.get_simulation(ss_dir).timesteps
-# all_timesteps = all_timesteps[:15]
-for timestep in all_timesteps:
-    halo2 = timestep.halos.all()[1]
-    try:
-        halo2['shrink_center']
-    except:
-        tqdm.tqdm.write(timestep.extension[-6:])#, 'does not have shrink_center')
-
-def main(num):
-    halo = halos_stars_dict[all_timesteps[-1].extension[-6:]][num]
+def main(num, simname, overwrite=False):
+    """Generate merger history plots for a specific halo.
+    
+    Args:
+        num (int): Halo number to process
+        simname (str): Name of simulation ('storm', 'elektra', 'rogue', or 'cptmarvel')
+        overwrite (bool): Whether to overwrite existing plot files (default: False)
+    """
+    # Initialize simulation data
+    (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0, 
+     halo_particle_dict, all_timesteps, halos_stars_dict, hostids, partids) = initialize_simulation_data(simname)
+    
+    uIDs = np.unique(hostids)
+    
+    halo = get_halo('004096', num, ss_dir)
+    tqdm.tqdm.write(f"Starting processing for halo: {num} with {halo.NStar} star particles")
 
     # Make a dict of the halo's id at each timestep
     halo_numbers, dbids = halo.calculate_for_progenitors("halo_number()", "dbid()")
@@ -242,7 +287,6 @@ def main(num):
     halo_snapshots_dict = {snapshot: dbid for snapshot, dbid in zip(snapshots, dbids)}
 
     # Save paths for the plot
-    overwrite = False
     save_bases = [os.path.join(outfile_dir, 'merge_plots', ss_dir+str(halo.halo_number)),
                   os.path.join(outfile_dir, 'merge_plots', ss_dir+str(halo.halo_number)+'zoom' ),
                   os.path.join(outfile_dir, 'merge_plots', ss_dir+str(halo.halo_number)+'morezoom')]
@@ -269,7 +313,7 @@ def main(num):
 
         # First timestep
         if i == 0:
-            #! NOT USING Reproduce unique color map seed
+            # Reproduce unique color map seed
             rng = np.random.default_rng(num*2) 
             uIDs_shuffled = rng.permutation(uIDs)
             tqdm.tqdm.write(str(uIDs_shuffled))
@@ -299,7 +343,7 @@ def main(num):
                     roughcen = np.median(s.s['pos'][relstars],axis=0)
                     print(f'Using median position of star particles for timestep {timestep}: {roughcen}')
                 elif timestep in select_timesteps:
-                    roughcen = get_halo(timestep, 1)['shrink_center']
+                    roughcen = get_halo(timestep, 1, ss_dir)['shrink_center']
                     print(f'Using halo 1 shrink center for timestep {timestep}: {roughcen}')
             else:
                 roughcen = halo['shrink_center']
@@ -321,11 +365,11 @@ def main(num):
             if basename.startswith('rogue') and num == 0:
                 select_timesteps = [all_timesteps[0].extension[-6:], all_timesteps[1].extension[-6:], all_timesteps[2].extension[-6:]]
                 if timestep == all_timesteps[3].extension[-6:]:
-                    currad = get_halo('000384', 1)['Rvir']
+                    currad = get_halo('000384', 1, ss_dir)['Rvir']
                 elif timestep == all_timesteps[0].extension[-6:]:
-                    currad = get_halo('000288', 1)['Rvir']
+                    currad = get_halo('000288', 1, ss_dir)['Rvir']
                 elif timestep in select_timesteps:
-                    currad = get_halo(timestep, 1)['Rvir']
+                    currad = get_halo(timestep, 1, ss_dir)['Rvir']
                     print(f'Using halo 1 virial radius for timestep {timestep}: {currad}')
             else:
                 currad = halo['Rvir']
@@ -352,13 +396,54 @@ def main(num):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        tqdm.tqdm.write(f"Processing halo: {sys.argv[1]}")
-        main(int(sys.argv[1]))
-    elif len(sys.argv) > 2:
-        for arg in tqdm.tqdm(sys.argv[1:]):
-            tqdm.tqdm.write(f"Processing halo: {arg}")
-            main(int(arg))
-    else:
-        tqdm.tqdm.write("Usage: python savehaloinfoananke.py <halo_index1> <halo_index2> ...")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Generate stellar halo merger history plots from cosmological simulations.",
+        epilog="""
+Examples:
+  # Plot merger history for halo 4 in storm simulation
+  python plothalomergers.py --name storm 4
+  
+  # Plot multiple halos from rogue simulation
+  python plothalomergers.py -n rogue 1 7 12
+  
+  # Overwrite existing plots for halos in cptmarvel simulation
+  python plothalomergers.py --name cptmarvel --overwrite 4 5 6
+  
+  # Short form with overwrite flag
+  python plothalomergers.py -n elektra -o 2 3
+
+Output:
+  Creates three versions of each plot with different zoom levels:
+  - Standard: scaled to z=0 virial radius
+  - Zoom: scaled to current snapshot virial radius  
+  - More zoom: 4x closer view of current virial radius
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    parser.add_argument(
+        '-n', '--name',
+        choices=['storm', 'elektra', 'rogue', 'cptmarvel'],
+        default='rogue',
+        help="Simulation name to process (default: rogue)"
+    )
+    parser.add_argument(
+        '-o', '--overwrite',
+        action='store_true',
+        help="Overwrite existing plot files (default: False, skip existing files)"
+    )
+    parser.add_argument(
+        'halo_numbers',
+        nargs='+',
+        type=int,
+        help='One or more halo numbers to process'
+    )
+    
+    args = parser.parse_args()
+    
+    simname = args.name
+    overwrite = args.overwrite
+    
+    for halo_num in args.halo_numbers:
+        tqdm.tqdm.write(f"Processing halo: {halo_num} from {simname} simulation")
+        main(halo_num, simname, overwrite)
