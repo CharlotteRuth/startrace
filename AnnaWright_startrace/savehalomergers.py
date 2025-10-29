@@ -60,7 +60,7 @@ for i, part in enumerate(partids):
 
 s = pynbody.load(ss_z0)
 h = s.halos(halo_numbers='v1')
-main_halo = get_halo('004096', 5) #! change
+main_halo = get_halo('004096', 10) #! change
 mask = s.s['amiga.grp'] == main_halo.halo_number
 mask2 = s.s['tform'] > 0
 mask = mask & mask2

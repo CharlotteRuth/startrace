@@ -3,8 +3,8 @@ import sys
 import socket
 hostname = socket.gethostname()
 if 'emu' in hostname:
-    os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/tangos_sims/'
-    os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/Databases/Marvel_BN_N10.db'
+    os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/Sims/romulus_zooms/'
+    os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/Sims/romulus_zooms/rom25_dwarf_zooms.db'
     # os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/pynbody/Tangos/Marvel_BN_N10.db'
     os.chdir('/home/ns1917/pynbody/AnnaWright_startrace/')
 else: # grinnell
@@ -23,55 +23,6 @@ import glob
 from pynbody.array import SimArray
 import pandas as pd
 import tqdm.auto as tqdm
-
-def setup_paths(simname):
-    """Configure simulation paths based on hostname and simulation name.
-    
-    Args:
-        simname: Name of simulation ('storm', 'elektra', 'rogue', or 'cptmarvel')
-    
-    Returns:
-        tuple: (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0)
-    """
-    if 'emu' in hostname:
-        simpath = '/home/ns1917/tangos_sims/'
-        outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
-    else:
-        simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
-        outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
-    
-    basename = f'{simname}.cosmo25cmb.4096g5HbwK1BH'
-    ss_dir = f'{simname}.4096g5HbwK1BH_bn'
-    sim_base = simpath + ss_dir + '/'
-    ss_z0 = sim_base + basename + '.004096'
-    
-    return simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0
-
-def load_halo_data(outfile_dir, basename):
-    """Load star particle data from Anna's pipeline.
-    
-    Args:
-        outfile_dir: Directory containing the HDF5 file
-        basename: Base name of the simulation
-    
-    Returns:
-        dict: Dictionary mapping particle IDs to their unique host IDs
-    """
-    with h5py.File(outfile_dir+'/'+basename+'_allhalostardata_upd.h5','r') as f:
-        hostids = f['host_IDs'].asstr()[:]  # unique host IDs
-        partids = f['particle_IDs'][:]  # iords
-        pct = f['particle_creation_times'][:]  # formation times
-        ph = f['particle_hosts'][:]  # local host IDs (i.e., host at formation time)
-        pp = f['particle_positions'][:]  # position at formation time
-        tsloc = f['timestep_location'][:]  # snapshot where star particle first appears
-    
-    uIDs = np.unique(hostids)
-    
-    halo_particle_dict = {}  # map iords to their unique host IDs
-    for i, part in enumerate(partids):
-        halo_particle_dict[part] = hostids[i]
-    
-    return halo_particle_dict
 
 def plot_halo_mergers(sp,mask,haloids,color_map,timestep,rad=None,savepath=None):
     """Plots stellar positions from a simulation in three 2D projections.
@@ -179,14 +130,23 @@ def get_halo(snapshot, halo_number):
 
 # Simulation name and path
 if 'emu' in hostname:
-    simpath = '/home/ns1917/tangos_sims/'
+    simpath = '/home/ns1917/Sims/romulus_zooms/'
     outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
+    annafile_dir = '/home/ns1917/pynbody/stellarhalo_trace_aw/updated_ids'
 else:
     simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
     outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
+    annafile_dir = '/home/selvani/MAP/pynbody/awright_mm'
 
-basename = 'rogue.cosmo25cmb.4096g5HbwK1BH'
-ss_dir = 'rogue.4096g5HbwK1BH_bn'
+# Get simname from command line argument
+if len(sys.argv) < 2:
+    tqdm.tqdm.write("Usage: python plothalomergersMM.py <simname>")
+    tqdm.tqdm.write("Example: python plothalomergersMM.py r442")
+    sys.exit(1)
+
+simname = sys.argv[1]
+basename = f'{simname}.romulus25.3072g1HsbBH'
+ss_dir = basename
 sim_base = simpath + ss_dir + '/'
 ss_z0 = sim_base + basename + '.004096'
 
@@ -201,7 +161,7 @@ halos_with_stars = [h for h in all_halos if h.NStar > 0 and h['Mvir'] > 1e9]
 
 
 # Read in data from Anna's pipeline
-with h5py.File(outfile_dir+'/'+basename+'_allhalostardata_upd.h5','r') as f:
+with h5py.File(annafile_dir+'/'+simname+'/'+simname+'_allhalostardata_consolidated2.h5','r') as f:
     hostids = f['host_IDs'].asstr()[:] # unique host IDs
     partids = f['particle_IDs'][:] # iords
     pct = f['particle_creation_times'][:] # formation times
@@ -224,8 +184,8 @@ for timestep in all_timesteps:
 tqdm.tqdm.write('Created halos dictionary')
 
 # Since we center the plot on shrink_center, test for its existence
+#! Halo 1025 cpt marvel is missing this
 all_timesteps = db.get_simulation(ss_dir).timesteps
-# all_timesteps = all_timesteps[:15]
 for timestep in all_timesteps:
     halo2 = timestep.halos.all()[1]
     try:
@@ -234,7 +194,7 @@ for timestep in all_timesteps:
         tqdm.tqdm.write(timestep.extension[-6:])#, 'does not have shrink_center')
 
 def main(num):
-    halo = halos_stars_dict[all_timesteps[-1].extension[-6:]][num]
+    halo = halos_stars_dict[all_timesteps[-1].extension[-6:]][0]
 
     # Make a dict of the halo's id at each timestep
     halo_numbers, dbids = halo.calculate_for_progenitors("halo_number()", "dbid()")
@@ -258,7 +218,7 @@ def main(num):
         timestep = timestep.extension[-6:]
 
         # Get simulation and halo
-        s = pynbody.load(sim_base + basename + '.' + timestep)
+        s = pynbody.load(sim_base + basename + '.' + timestep +'/'+ basename + '.' + timestep)
         s.physical_units()
         halo = db.get_halo(halo_snapshots_dict[timestep])
         tqdm.tqdm.write(f"Now on {timestep}")
@@ -270,9 +230,9 @@ def main(num):
         # First timestep
         if i == 0:
             #! NOT USING Reproduce unique color map seed
-            rng = np.random.default_rng(num*2) 
+            rng = np.random.default_rng(halo.halo_number*2) 
             uIDs_shuffled = rng.permutation(uIDs)
-            tqdm.tqdm.write(str(uIDs_shuffled))
+            tqdm.tqdm.write(f'Seed {halo.halo_number*2}: {str(uIDs_shuffled)}')
             colormap = make_colormap(uIDs_shuffled)
 
             # Universal scaling plot to z=0 value
@@ -289,20 +249,7 @@ def main(num):
         # Center on halo
         try:
             # Use existing value from tangos
-            #! fix for halo 1 of rogue
-            if basename.startswith('rogue') and num == 0:
-                select_timesteps = [all_timesteps[1].extension[-6:], all_timesteps[2].extension[-6:]]
-                if timestep == all_timesteps[3].extension[-6:] or timestep == all_timesteps[0].extension[-6:]:
-                    relhostid = np.array(['0768_341'])
-                    pids = partids[(np.isin(hostids,relhostid))]
-                    relstars = np.isin(s.s['iord'],pids)
-                    roughcen = np.median(s.s['pos'][relstars],axis=0)
-                    print(f'Using median position of star particles for timestep {timestep}: {roughcen}')
-                elif timestep in select_timesteps:
-                    roughcen = get_halo(timestep, 1)['shrink_center']
-                    print(f'Using halo 1 shrink center for timestep {timestep}: {roughcen}')
-            else:
-                roughcen = halo['shrink_center']
+            roughcen = halo['shrink_center']
         except:
             try:
                 # Try calculating from pynbody
@@ -317,18 +264,7 @@ def main(num):
 
         # Radius for adaptive zoom plots
         try:
-            #! fix for halo 1 of rogue
-            if basename.startswith('rogue') and num == 0:
-                select_timesteps = [all_timesteps[0].extension[-6:], all_timesteps[1].extension[-6:], all_timesteps[2].extension[-6:]]
-                if timestep == all_timesteps[3].extension[-6:]:
-                    currad = get_halo('000384', 1)['Rvir']
-                elif timestep == all_timesteps[0].extension[-6:]:
-                    currad = get_halo('000288', 1)['Rvir']
-                elif timestep in select_timesteps:
-                    currad = get_halo(timestep, 1)['Rvir']
-                    print(f'Using halo 1 virial radius for timestep {timestep}: {currad}')
-            else:
-                currad = halo['Rvir']
+            currad = halo['Rvir']
         except:
             currad = halo['max_radius']
 
@@ -352,13 +288,10 @@ def main(num):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        tqdm.tqdm.write(f"Processing halo: {sys.argv[1]}")
-        main(int(sys.argv[1]))
-    elif len(sys.argv) > 2:
-        for arg in tqdm.tqdm(sys.argv[1:]):
-            tqdm.tqdm.write(f"Processing halo: {arg}")
-            main(int(arg))
+    if len(sys.argv) >= 2:
+        tqdm.tqdm.write(f"Processing simulation: {simname}")
+        main(None)
     else:
-        tqdm.tqdm.write("Usage: python savehaloinfoananke.py <halo_index1> <halo_index2> ...")
+        tqdm.tqdm.write("Usage: python plothalomergersMM.py <simname>")
+        tqdm.tqdm.write("Example: python plothalomergersMM.py r442")
         sys.exit(1)

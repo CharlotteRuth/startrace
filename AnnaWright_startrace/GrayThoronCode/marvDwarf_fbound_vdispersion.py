@@ -1,12 +1,18 @@
+"""
+
+
+"""
 #Bound fraction to Marvelous Dwarfs
 import h5py
 import numpy as np
 import pandas as pd
-from bound_fraction import compute_boundness_recursive_BFE
+from bound_fraction_v2 import compute_iterative_boundness
 from morphology import local_velocity_dispersion
 import astropy.units as u
 import tqdm.auto as tqdm
 import sys
+import argparse
+import re
 # from tqdm.contrib.logging import logging_redirect_tqdm
 
 def bound_fraction_task(results_df, dm_pos, dm_vel, dm_masses, star_pos, star_vel, star_masses, h5file, index_match=None):
@@ -24,9 +30,9 @@ def bound_fraction_task(results_df, dm_pos, dm_vel, dm_masses, star_pos, star_ve
     for i in range(len(methods)+1):
         if i != len(methods):
             tqdm.tqdm.write(f'Running method {i}')
-            result = compute_boundness_recursive_BFE(
-                dm_pos,     dm_vel,     dm_masses,
-                star_pos,   star_vel,   star_masses, 
+            result = compute_iterative_boundness(
+                positions_dark=dm_pos,     velocity_dark=dm_vel,     mass_dark=dm_masses,
+                positions_star=star_pos,   velocity_star=star_vel,   mass_star=star_masses, 
                 center_on=methods[i][0], center_vel_with_KDE=methods[i][1],
                 verbose=False
             )
@@ -137,22 +143,34 @@ def calc_fbound_veldisp(ids, dirpath = '', output_path='f_bound.csv'):
 
     results_df.to_csv(output_path)
 
+
+def _validate_snap_id(s):
+    """Validate snapshot id strings like '0291_1' or '0384_47'.
+
+    Accepts exactly four digits, an underscore, then one or more digits.
+    Raises argparse.ArgumentTypeError on invalid format.
+    """
+    if not re.match(r'^\d{4}_\d+$', s):
+        raise argparse.ArgumentTypeError("snap_id must be like '0291_1' or '0384_47'")
+    return s
+
 if __name__ == "__main__":
 
-    halo = 5
-    name = 'elektra'
-    
-    if len(sys.argv) == 2:
-        print(f"Processing halo: {sys.argv[1]}")
-        # main(sys.argv[1]) 
-        # dirpath = f'/home/ns1917/pynbody/stellarhalo_trace_aw/uw_boundfrac/{halo}/'
-        dirpath = f'/home/ns1917/gdrive/boundfrac/{name}/{halo}/'
-        calc_fbound_veldisp(f'{name}.4096g5HbwK1BH_bn_{halo}_{sys.argv[1]}_particle_data', dirpath=dirpath,output_path=f'{dirpath}{name}.4096g5HbwK1BH_bn_{halo}_{sys.argv[1]}_f_bound.csv')
-    elif len(sys.argv) > 2:
-        for arg in tqdm.tqdm(sys.argv[1:]):
-            print(f"Processing halo: {arg}")
-            dirpath = f'/home/ns1917/gdrive/boundfrac/{name}/{halo}/'
-            calc_fbound_veldisp(f'{name}.4096g5HbwK1BH_bn_{halo}_{arg}_particle_data', dirpath=dirpath,output_path=f'{dirpath}{name}.4096g5HbwK1BH_bn_{halo}_{arg}_f_bound.csv')
-    else:
-        print("No halo index provided. Exiting.")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Calculate bound fractions for Marvelous dwarfs")
+    parser.add_argument('-n', '--name', choices=['storm', 'elektra', 'rogue', 'cptmarvel'], default='storm',
+                        help="dataset name to use (default: storm)")
+    parser.add_argument('-H', '--halo', type=int, default=7, help="halo number to use in filenames (default: 7)")
+    parser.add_argument('snap_ids', nargs='+', help='One or more snapshot identifiers to process')
+
+    args = parser.parse_args()
+
+    name = args.name
+    halo = args.halo
+
+    dirpath = f'/home/ns1917/gdrive/boundfrac/{name}/{halo}/'
+
+    for arg in tqdm.tqdm(args.snap_ids, desc="Processing snapshots"):
+        print(f"Processing snapshot: {arg}")
+        calc_fbound_veldisp(f'{name}.4096g5HbwK1BH_bn_{halo}_{arg}_particle_data',
+                            dirpath=dirpath,
+                            output_path=f'{dirpath}{name}.4096g5HbwK1BH_bn_{halo}_{arg}_f_bound.csv')
