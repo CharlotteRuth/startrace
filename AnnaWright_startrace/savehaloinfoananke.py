@@ -20,7 +20,7 @@ import os
 import sys
 import socket
 import argparse
-# Configure paths based on hostname
+#! Configure paths based on hostname
 hostname = socket.gethostname()
 if 'emu' in hostname:
     os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/tangos_sims/'
@@ -51,7 +51,7 @@ def setup_paths(simname):
     Returns:
         tuple: (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0)
     """
-    if 'emu' in hostname:
+    if 'emu' in hostname: #! change filepaths as needed
         simpath = '/home/ns1917/tangos_sims/'
         outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
     else:
@@ -75,6 +75,7 @@ def load_halo_data(outfile_dir, basename):
     Returns:
         dict: Dictionary mapping particle IDs to their unique host IDs
     """
+    #! change/update filename as needed
     with h5py.File(outfile_dir+'/'+basename+'_allhalostardata_upd.h5','r') as f:
         hostids = f['host_IDs'].asstr()[:]  # unique host IDs
         partids = f['particle_IDs'][:]  # iords
@@ -129,7 +130,7 @@ def main(idx, simname):
     all_star_iords = np.sort(stars_to_consider)
     num_star_particles = len(all_star_iords)
 
-    tstep = db.get_simulation(ss_dir).timesteps[-1]
+    tstep = db.get_simulation(ss_dir).timesteps[-1] #! select different snapshot if needed
     tqdm.tqdm.write(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
 
     subs = sp.s[np.isin(sp.s['iord'], all_star_iords)]

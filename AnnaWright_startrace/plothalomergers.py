@@ -63,6 +63,7 @@ def setup_paths(simname):
     Returns:
         tuple: (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0)
     """
+    #! change filepaths as needed
     if 'emu' in hostname:
         simpath = '/home/ns1917/tangos_sims/'
         outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
@@ -89,6 +90,7 @@ def load_halo_data(outfile_dir, basename):
         list: List of unique host IDs
         list: List of particle IDs
     """
+    #! Configure paths 
     with h5py.File(outfile_dir+'/'+basename+'_allhalostardata_upd.h5','r') as f:
         hostids = f['host_IDs'].asstr()[:]  # unique host IDs
         partids = f['particle_IDs'][:]  # iords
@@ -401,7 +403,7 @@ def main(num, simname, overwrite=False, create_animation=False):
                 base_name = os.path.basename(folder_path)
                 output_gif_path = os.path.join(outfile_dir, 'merge_plots', f'{base_name}_animation.gif')
                 output_mp4_path = os.path.join(outfile_dir, 'merge_plots', f'{base_name}_animation.mp4')
-
+                #! turn on gifs
                 # create_animation_simple(folder_path, output_gif_path, fps=12)
                 create_animation_with_padding(folder_path, output_mp4_path, fps=6)
                 tqdm.tqdm.write(f"Created animation: {output_gif_path}")
