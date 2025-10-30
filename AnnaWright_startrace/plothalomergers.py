@@ -380,33 +380,38 @@ def main(num, simname, overwrite=False, create_animation=False):
             currad = halo['max_radius']
 
         # Filter snapshot by only particles in the virial radius, center on halo
-        sp = s[pynbody.filt.Sphere(SimArray([rad], "kpc"), roughcen)].load_copy()
-        sp.physical_units()
-        sp['pos'] -= roughcen
-        tqdm.tqdm.write(f"Num stars: {len(sp.s)}", end=', ') # num of stars
+        try:
+            sp = s[pynbody.filt.Sphere(SimArray([rad], "kpc"), roughcen)].load_copy()
+            sp.physical_units()
+            sp['pos'] -= roughcen
+            tqdm.tqdm.write(f"Num stars: {len(sp.s)}", end=', ') # num of stars
 
-        # mask = np.where(sp.s['amiga.grp'] == halo.halo_number)[0]
-        # mask = np.where(sp.s['amiga.grp'] == sp.s['amiga.grp'])[0] # dummy to ignore mask
-        mask = sp.s['tform'] > 0 # Exclude wind particles: FROM ANNA'S CODE
-        haloids = np.array([halo_particle_dict[part] for part in sp.s['iord'][mask]])
-        tqdm.tqdm.write(f"Masked num stars: {len(sp.s[mask])}")
+            # mask = np.where(sp.s['amiga.grp'] == halo.halo_number)[0]
+            # mask = np.where(sp.s['amiga.grp'] == sp.s['amiga.grp'])[0] # dummy to ignore mask
+            mask = sp.s['tform'] > 0 # Exclude wind particles: FROM ANNA'S CODE
+            haloids = np.array([halo_particle_dict[part] for part in sp.s['iord'][mask]])
+            tqdm.tqdm.write(f"Masked num stars: {len(sp.s[mask])}")
 
-        # Plot
-        plot_halo_mergers(sp, mask, haloids, colormap, timestep, rad/np.sqrt(2), save_path) # scale standard
-        plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad, save_path2) # zoomin
-        plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad/(np.sqrt(2)*4), save_path3) # more zoomed
-        pbar.update(1)
+            # Plot
+            plot_halo_mergers(sp, mask, haloids, colormap, timestep, rad/np.sqrt(2), save_path) # scale standard
+            plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad, save_path2) # zoomin
+            plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad/(np.sqrt(2)*4), save_path3) # more zoomed
+            pbar.update(1)
+        except Exception as e:
+            tqdm.tqdm.write(f"Error processing timestep {timestep}: {e}")
+            tqdm.tqdm.write("Terminating loop due to error.")
+            pbar.close()
+            break
 
-    else:
-        if create_animation:
-            for folder_path in save_bases:
-                base_name = os.path.basename(folder_path)
-                output_gif_path = os.path.join(outfile_dir, 'merge_plots', f'{base_name}_animation.gif')
-                output_mp4_path = os.path.join(outfile_dir, 'merge_plots', f'{base_name}_animation.mp4')
-                #! turn on gifs
-                # create_animation_simple(folder_path, output_gif_path, fps=12)
-                create_animation_with_padding(folder_path, output_mp4_path, fps=6)
-                tqdm.tqdm.write(f"Created animation: {output_gif_path}")
+    if create_animation:
+        for folder_path in save_bases:
+            base_name = os.path.basename(folder_path)
+            output_gif_path = os.path.join(outfile_dir, 'merge_plots', f'{base_name}_animation.gif')
+            output_mp4_path = os.path.join(outfile_dir, 'merge_plots', f'{base_name}_animation.mp4')
+            #! turn on gifs
+            # create_animation_simple(folder_path, output_gif_path, fps=12)
+            create_animation_with_padding(folder_path, output_mp4_path, fps=6)
+            tqdm.tqdm.write(f"Created animation: {output_gif_path}")
 
 
 if __name__ == "__main__":
@@ -467,6 +472,12 @@ Output:
     overwrite = args.overwrite
     create_animation = args.create_animation
 
-    for halo_num in args.halo_numbers:
+    # Process single or multiple halo numbers
+    if len(args.halo_numbers) == 1:
+        halo_num = args.halo_numbers[0]
         tqdm.tqdm.write(f"Processing halo: {halo_num} from {simname} simulation")
         main(halo_num, simname, overwrite, create_animation)
+    else:
+        for halo_num in args.halo_numbers:
+            tqdm.tqdm.write(f"Processing halo: {halo_num} from {simname} simulation")
+            main(halo_num, simname, overwrite, create_animation)

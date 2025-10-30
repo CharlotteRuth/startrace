@@ -198,7 +198,12 @@ Examples:
     args = parser.parse_args()
     
     simname = args.name
-    
-    for halo_idx in tqdm.tqdm(args.halo_indices, desc=f"Processing {simname} halos"):
-        tqdm.tqdm.write(f"Processing halo: {halo_idx}")
-        main(halo_idx, simname)
+
+    # Process single or multiple halos
+    if len(args.halo_indices) == 1:
+        tqdm.tqdm.write(f"Processing halo: {args.halo_indices[0]}")
+        main(args.halo_indices[0], simname)
+    else:
+        for halo_idx in tqdm.tqdm(args.halo_indices, desc=f"Processing {simname} halos"):
+            tqdm.tqdm.write(f"Processing halo: {halo_idx}")
+            main(halo_idx, simname)

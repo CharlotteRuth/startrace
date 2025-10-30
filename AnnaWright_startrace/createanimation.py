@@ -105,15 +105,79 @@ def create_animation_simple(input_folder, output_file, fps=12):
 
     print("Animation created successfully!")
     
-# # --- Example Usage ---
-# # Replace this with the actual path to your saved plots
-# image_folder = '/home/selvani/MAP/pynbody/stellarhalo_trace_aw/merge_plots/3' 
-
-# # Define the output file path (can be .gif or .mp4)
-# output_path = os.path.join(image_folder, 'merger_animation.mp4')
-
-# # Create the animation
-# create_animation_with_padding(image_folder, output_path, fps=5)
 
 if __name__ == "__main__":
-    raise NotImplementedError("This module is intended to be imported and used by other scripts.")
+    parser = argparse.ArgumentParser(
+        description="Create animations (GIF or MP4) from a folder of PNG images.",
+        epilog="""
+Examples:
+  # Create MP4 with padding (recommended for varying image sizes)
+  python createanimation.py /path/to/images output.mp4 --fps 6
+  
+  # Create GIF without padding (assumes uniform image sizes)
+  python createanimation.py /path/to/images output.gif --fps 12 --simple
+  
+  # Use default fps (6 for padding, 12 for simple)
+  python createanimation.py /path/to/images animation.mp4
+
+Output:
+  The script will create an animation file at the specified output path.
+  Supported formats: .gif, .mp4
+  
+  With padding mode (default):
+    - Scans all images to find maximum dimensions
+    - Pads smaller images with black borders
+    - Prevents distortion from varying sizes
+  
+  With simple mode (--simple flag):
+    - Assumes all images have the same dimensions
+    - Faster processing, no padding
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    parser.add_argument(
+        'input_folder',
+        help="Path to the folder containing PNG images"
+    )
+    parser.add_argument(
+        'output_file',
+        help="Path for the output animation file (.gif or .mp4)"
+    )
+    parser.add_argument(
+        '--fps',
+        type=int,
+        default=None,
+        help="Frames per second for the output animation (default: 6 for padding mode, 12 for simple mode)"
+    )
+    parser.add_argument(
+        '--simple',
+        action='store_true',
+        help="Use simple mode without padding (assumes uniform image sizes)"
+    )
+    
+    args = parser.parse_args()
+    
+    # Set default fps based on mode
+    if args.fps is None:
+        fps = 12 if args.simple else 6
+    else:
+        fps = args.fps
+    
+    # Validate input folder exists
+    if not os.path.isdir(args.input_folder):
+        print(f"Error: Input folder '{args.input_folder}' does not exist.")
+        exit(1)
+    
+    # Validate output file extension
+    _, ext = os.path.splitext(args.output_file)
+    if ext.lower() not in ['.gif', '.mp4']:
+        print(f"Warning: Output file extension '{ext}' may not be supported. Recommended: .gif or .mp4")
+    
+    # Create the animation
+    if args.simple:
+        print(f"Creating animation in simple mode (fps={fps})...")
+        create_animation_simple(args.input_folder, args.output_file, fps=fps)
+    else:
+        print(f"Creating animation with padding (fps={fps})...")
+        create_animation_with_padding(args.input_folder, args.output_file, fps=fps)

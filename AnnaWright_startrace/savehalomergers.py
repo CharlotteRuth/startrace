@@ -356,6 +356,10 @@ def _validate_merger_id(s):
         raise argparse.ArgumentTypeError(
             f"merger_id must be format 'SSSS_HH' (e.g., '0384_47'), got: {s}"
         )
+    elif int(s.split('_')[1]) <= 0:
+        raise argparse.ArgumentTypeError(
+            f"halo number in merger_id must be >=1, got: {s}"
+        )
     return s
 
 
