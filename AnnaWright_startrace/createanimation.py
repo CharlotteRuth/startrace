@@ -1,3 +1,32 @@
+"""
+createanimation.py
+
+Create animations (GIF or MP4) from PNG image sequences.
+
+This script provides utilities to generate animations from a folder of PNG images.
+It supports two modes:
+1. Padding mode (default): Scans all images to find maximum dimensions and pads
+   smaller images with black borders to ensure uniform frame sizes, preventing
+   crashes when image sizes vary (likely if source images are from matplotlib).
+2. Simple mode: Assumes all images have uniform dimensions for faster processing
+   without padding overhead.
+
+The script can be used both as a standalone command-line tool and as a module in other Python scripts.
+
+Author: Nithun Selva
+Date: 2025
+Usage:
+    # Create MP4 with padding (recommended for varying image sizes)
+    python createanimation.py /path/to/images output.mp4 --fps 6
+    
+    # Create GIF in simple mode (assumes uniform sizes)
+    python createanimation.py /path/to/images output.gif --fps 12 --simple
+    
+    # Use as a module in another script
+    from createanimation import create_animation_with_padding
+    create_animation_with_padding('/path/to/images', 'output.mp4', fps=6)
+"""
+
 import imageio.v2 as imageio
 import numpy as np
 import glob
