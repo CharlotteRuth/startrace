@@ -1,3 +1,0 @@
-# Merger Trees
-
-Test

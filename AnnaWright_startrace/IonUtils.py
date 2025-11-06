@@ -1,3 +1,6 @@
+# Code from Jana Vadillo, Grinnell College
+# Modified by Nithun Selva, 2025 for visualizations
+
 import pynbody
 import numpy as np
 import pynbody.plot.sph as sph
