@@ -20,16 +20,7 @@ import os
 import sys
 import socket
 import argparse
-#! Configure paths based on hostname
-hostname = socket.gethostname()
-if 'emu' in hostname:
-    os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/tangos_sims/'
-    os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/Databases/Marvel_BN_N10.db'
-    os.chdir('/home/ns1917/pynbody/AnnaWright_startrace/')
-else:  # grinnell
-    os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
-    os.environ['TANGOS_DB_CONNECTION'] = '/home/selvani/MAP/pynbody/Tangos/Marvel_BN_N10.db'
-    os.chdir('/home/selvani/MAP/pynbody/AnnaWright_startrace/')
+
 
 import pynbody
 import numpy as np
@@ -46,24 +37,78 @@ def setup_paths(simname):
     """Configure simulation paths based on hostname and simulation name.
     
     Args:
-        simname: Name of simulation ('storm', 'elektra', 'rogue', or 'cptmarvel')
+        simname: Name of simulation ('storm', 'elektra', 'rogue', 'cptmarvel' or 'rXXX')
     
     Returns:
         tuple: (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0)
     """
     if 'emu' in hostname: #! change filepaths as needed
-        simpath = '/home/ns1917/tangos_sims/'
-        outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
+        if suite=='marvel_dwarfs':
+            simpath = '/home/ns1917/tangos_sims/'
+        else:
+            simpath = '/data/REPOSITORY/romulus_zooms/'
+        # outfile_dir = "/home/christenc/Code/python/NithunSelva_startrace/pynbody/stellarhalo_trace_aw/" #"/home/ns1917/pynbody/stellarhalo_trace_aw/"
+        outfile_dir = "/home/christenc/Code/Datafiles/stellar_halos/"
     else:
         simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
         outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
     
-    basename = f'{simname}.cosmo25cmb.4096g5HbwK1BH'
-    ss_dir = f'{simname}.4096g5HbwK1BH_bn'
-    sim_base = simpath + ss_dir + '/'
-    ss_z0 = sim_base + basename + '.004096'
+    if suite=='marvel_dwarfs':
+        basename = f'{simname}.cosmo25cmb.4096g5HbwK1BH'
+        ss_dir = f'{simname}.4096g5HbwK1BH_bn'
+        sim_base = simpath + ss_dir + '/'
+        ss_z0 = sim_base + basename + '.004096'
+    else: 
+        basename = f'{simname}'
+        ss_dir = f'{simname}.romulus25.3072g1HsbBH'
+        sim_base = simpath + ss_dir + '/'
+        ss_z0 = sim_base + basename + '.romulus25.3072g1HsbBH.004096' + '/'+basename + '.romulus25.3072g1HsbBH.004096'
+
+
     
     return simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0
+
+def read_massform_file(massform_path, ngas, ndm, nstar, byteswap=False):
+    """Read massform values directly from a *.massform auxiliary file.
+
+    Bypasses pynbody's starlog reader (which causes a KeyError when 'iord' is
+    already a family-level array) by reading the tipsy auxiliary file directly.
+
+    The auxiliary file stores one value per particle for ALL particle types
+    (gas, dm, star) in order.  Star values start at index ngas+ndm.
+
+    Args:
+        massform_path: Full path to the *.massform file
+        ngas:     Number of gas particles in the full snapshot
+        ndm:      Number of DM particles in the full snapshot
+        nstar:    Number of star particles in the full snapshot
+        byteswap: Whether the file is byte-swapped (big-endian)
+
+    Returns:
+        np.ndarray: massform values for star particles, in simulation mass units
+    """
+    import struct
+    try:
+        # --- Try ASCII format first ---
+        with open(massform_path, 'r') as f:
+            n_total = int(f.readline().strip())
+            vals = np.fromiter(
+                (float(line) for line in f if line.strip()),
+                dtype=np.float32,
+                count=n_total,
+            )
+    except (ValueError, UnicodeDecodeError):
+        # --- Binary format: 4-byte int header then float32 values ---
+        with open(massform_path, 'rb') as f:
+            raw = f.read(4)
+            n_total = struct.unpack(">i" if byteswap else "i", raw)[0]
+            vals = np.frombuffer(f.read(n_total * 4), dtype=np.float32)
+            if byteswap:
+                vals = vals.byteswap()
+
+    # Slice out only the star portion
+    return vals[ngas + ndm: ngas + ndm + nstar]
+
 
 def load_halo_data(outfile_dir, basename):
     """Load star particle data from Anna's pipeline.
@@ -76,7 +121,12 @@ def load_halo_data(outfile_dir, basename):
         dict: Dictionary mapping particle IDs to their unique host IDs
     """
     #! change/update filename as needed
-    with h5py.File(outfile_dir+'/'+basename+'_allhalostardata_upd.h5','r') as f:
+    if suite=='marvel_dwarfs':
+        starfile_name = outfile_dir+'/'+basename+'_allhalostardata_upd.h5'
+    else:
+        starfile_name = outfile_dir+'/'+basename+'/' + basename + '_allhalostardata_consolidated2.h5'
+        
+    with h5py.File(starfile_name,'r') as f:
         hostids = f['host_IDs'].asstr()[:]  # unique host IDs
         partids = f['particle_IDs'][:]  # iords
         pct = f['particle_creation_times'][:]  # formation times
@@ -112,10 +162,41 @@ def main(idx, simname):
     
     s = pynbody.load(ss_z0)
     h = s.halos(halo_numbers='v1')
+
+    # --- Build iord -> massform mapping directly from *.massform file ---
+    # This avoids pynbody's starlog reader, which raises a KeyError when
+    # 'iord' is already a family-level array.
+    massform_path = ss_z0 + '.massform'
+    if not os.path.exists(massform_path):
+        candidates = glob.glob(ss_z0 + '*.massform')
+        if candidates:
+            massform_path = candidates[0]
+        else:
+            raise FileNotFoundError(
+                f"No .massform file found for snapshot: {ss_z0}"
+            )
+    tqdm.tqdm.write(f"Reading massform from: {os.path.basename(massform_path)}")
+    raw_massform = read_massform_file(
+        massform_path,
+        ngas=len(s.g),
+        ndm=len(s.dm),
+        nstar=len(s.s),
+        byteswap=getattr(s, '_byteswap', False),
+    )
+    # Convert from simulation mass units to Msol
+    mass_unit = s.s['mass'].units
+    massform_physical = SimArray(raw_massform, mass_unit)
+    massform_physical.convert_units('Msol')
+    # Map star iord -> massform [Msol]
+    iord_to_massform = dict(zip(s.s['iord'], massform_physical))
     
     # Center the whole simulation on the halo of interest.
     pynbody.analysis.halo.center(h[int(idx)], vel=True)
-    rvir = h[int(idx)].properties['Rvir']
+    #print(h[int(idx)].properties)
+    if suite=='marvel_dwarfs':
+        rvir = h[int(idx)].properties['Rvir']
+    else:
+        rvir = h[int(idx)].properties['Rhalo']
     cen = [0, 0, 0]  # Center is at origin after centering
     sp = s[pynbody.filt.Sphere(SimArray([rvir], "kpc"), cen)].load_copy() # only show particles in the specified sphere
     sp.physical_units()
@@ -132,19 +213,21 @@ def main(idx, simname):
 
     tstep = db.get_simulation(ss_dir).timesteps[-1] #! select different snapshot if needed
     tqdm.tqdm.write(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
-
-    subs = sp.s[np.isin(sp.s['iord'], all_star_iords)]
-    iords_in_subs = np.array(subs['iord'])
-
-    star_uid = [halo_particle_dict[i] for i in iords_in_subs]
-    star_pos = subs['pos']
-    star_vel = subs['vel']
-    star_mass = subs['mass']
-    star_massform = subs['massform']
-    star_age = subs['age']
-    star_feh = subs['feh']
-    star_oxh = subs['oxh']
-    tqdm.tqdm.write(f"Processed {len(iords_in_subs)} star particles in snapshot {tstep.extension[-6:]}")
+    
+    # Create mask for filtering instead of creating subset
+    mask = np.isin(sp.s['iord'], all_star_iords)
+    
+    star_uid = [halo_particle_dict[i] for i in sp.s['iord'][mask]]
+    star_pos = sp.s['pos'][mask]
+    star_vel = sp.s['vel'][mask]
+    star_mass = sp.s['mass'][mask]
+    star_massform = SimArray(
+        [iord_to_massform[i] for i in sp.s['iord'][mask]], 'Msol'
+    )
+    star_age = sp.s['age'][mask]
+    star_feh = sp.s['feh'][mask]
+    star_oxh = sp.s['oxh'][mask]
+    tqdm.tqdm.write(f"Processed {len(star_uid)} star particles in snapshot {tstep.extension[-6:]}")
     
     output_filename = os.path.join(outfile_dir, 'ananke', simname, f"ananke_{basename}_{idx}_data.h5")
     if not os.path.exists(os.path.dirname(output_filename)):
@@ -153,7 +236,7 @@ def main(idx, simname):
 
     with h5py.File(output_filename, 'w') as f:
         # Star data
-        f.create_dataset('star_iords', data=iords_in_subs)
+        f.create_dataset('star_iords', data=sp.s['iord'][mask])
         f.create_dataset('star_uid', data=star_uid)#, dtype=h5py.string_dtype(encoding='utf-8'))
         f.create_dataset('star_pos', data=star_pos)
         f.create_dataset('star_vel', data=star_vel)
@@ -184,7 +267,7 @@ Examples:
     
     parser.add_argument(
         '-n', '--name', 
-        choices=['storm', 'elektra', 'rogue', 'cptmarvel'], 
+        #choices=['storm', 'elektra', 'rogue', 'cptmarvel'], 
         default='rogue',
         help="Simulation name to process (default: rogue)"
     )
@@ -198,6 +281,26 @@ Examples:
     args = parser.parse_args()
     
     simname = args.name
+
+    #! Configure paths based on hostname
+    hostname = socket.gethostname()
+    if simname=='rogue' or simname=='elektra' or simname=='storm':
+        suite='marvel_dwarfs'
+    else:
+        suite='romulus_zooms'
+    if 'emu' in hostname:
+        if suite=='romulus_zooms':
+            os.environ['TANGOS_SIMULATION_FOLDER'] = '/data/REPOSITORY/romulus_zooms/'
+            os.environ['TANGOS_DB_CONNECTION'] = '/data/REPOSITORY/romulus_zooms/rom25_dwarf_zooms.db'
+        else:
+            os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/tangos_sims/'
+            os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/Databases/Marvel_BN_N10.db'
+
+        os.chdir('/home/ns1917/pynbody/AnnaWright_startrace/')
+    else:  # grinnell
+        os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
+        os.environ['TANGOS_DB_CONNECTION'] = '/home/selvani/MAP/pynbody/Tangos/Marvel_BN_N10.db'
+        os.chdir('/home/selvani/MAP/pynbody/AnnaWright_startrace/')
 
     # Process single or multiple halos
     if len(args.halo_indices) == 1:

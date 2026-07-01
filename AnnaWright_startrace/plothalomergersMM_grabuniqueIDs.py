@@ -17,10 +17,10 @@ Author: Nithun Selva
 Date: 2025
 Usage:
     # Plot merger history for simulation r442
-    python plothalomergersMM.py r442
+    python plothalomergersMM.py --name r442
     
     # Plot with overwrite enabled for r329
-    python plothalomergersMM.py r329 --overwrite
+    python plothalomergersMM.py -n r329 --overwrite
     
     # Show help
     python plothalomergersMM.py --help
@@ -30,20 +30,13 @@ import os
 import sys
 import socket
 import argparse
-import tangos as db
 # Determine hostname to configure paths appropriately
 hostname = socket.gethostname()
 if 'emu' in hostname:
-    #os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/Sims/romulus_zooms/'
-    #os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/Sims/romulus_zooms/rom25_dwarf_zooms.db'
+    os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/ns1917/Sims/romulus_zooms/'
+    os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/Sims/romulus_zooms/rom25_dwarf_zooms.db'
     # os.environ['TANGOS_DB_CONNECTION'] = '/home/ns1917/pynbody/Tangos/Marvel_BN_N10.db'
-    #os.chdir('/home/ns1917/pynbody/AnnaWright_startrace/')
-
-    simpath = '/data/REPOSITORY/romulus_zooms'
-    os.environ['TANGOS_SIMULATION_FOLDER'] = simpath
-    db.core.init_db(simpath + '/rom25_dwarf_zooms.db')
-    os.chdir('/home/christenc//Code/python/NithunSelva_startrace/pynbody/AnnaWright_startrace/')
-
+    os.chdir('/home/ns1917/pynbody/AnnaWright_startrace/')
 else: # grinnell
     os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
     # os.environ['TANGOS_DB_CONNECTION'] = '/home/selvani/MAP/Data/Marvel_BN_N10.db'
@@ -53,6 +46,7 @@ else: # grinnell
 import pynbody
 import numpy as np
 import h5py
+import tangos as db
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import glob
@@ -61,8 +55,7 @@ import pandas as pd
 import tqdm.auto as tqdm
 from createanimation import create_animation_with_padding, create_animation_simple
 
-def plot_halo_mergers(sp, mask, haloids, color_map, timestep, rad=None, savepath=None,
-                      tform_arr=None, prev_snap_a=None):
+def plot_halo_mergers(sp,mask,haloids,color_map,timestep,rad=None,savepath=None):
     """Plots stellar positions from a simulation in three 2D projections.
 
     This function generates a 1x3 matplotlib figure showing XY, YZ, and XZ
@@ -90,12 +83,6 @@ def plot_halo_mergers(sp, mask, haloids, color_map, timestep, rad=None, savepath
         savepath (str, optional): 
             The file path to save the generated plot. If None, the plot is 
             only displayed. Defaults to None.
-        tform_arr (array, optional):
-            Formation times (scale factors) for the masked star particles.
-            Used together with `prev_snap_a` to identify newly formed stars.
-        prev_snap_a (float, optional):
-            Scale factor of the chronologically previous snapshot. Particles
-            with tform > prev_snap_a are plotted at alpha=1 (fully opaque).
             
     Returns:
         None
@@ -112,78 +99,20 @@ def plot_halo_mergers(sp, mask, haloids, color_map, timestep, rad=None, savepath
     ]
 
     pos_data = sp.s['pos'][mask]
-    particle_colors_arr = np.array(particle_colors)  # (N, 4) for boolean-mask indexing
-
-    # Identify particles newly formed since the previous snapshot (tform is scale factor)
-    if tform_arr is not None and prev_snap_a is not None:
-        new_mask = np.asarray(tform_arr) > prev_snap_a
-    else:
-        new_mask = None
-
-    # For each unique halo, compute the median position and the particle count
-    # within the field of view (-rad < x,y,z < rad).
-    unique_hids = np.unique(haloids)
-    halo_median_pos = {}  # hid -> (x, y, z) median within FOV
-    halo_fov_counts = {}  # hid -> number of particles within FOV
-
-    for hid in unique_hids:
-        hid_mask = (haloids == hid)
-        hid_pos = pos_data[hid_mask]
-
-        if rad is not None:
-            # Select particles within the cubic field of view using pynbody-style
-            # coordinate filtering applied to the numpy position array.
-            fov_mask = (
-                (hid_pos[:, 0] > -rad) & (hid_pos[:, 0] < rad) &
-                (hid_pos[:, 1] > -rad) & (hid_pos[:, 1] < rad) &
-                (hid_pos[:, 2] > -rad) & (hid_pos[:, 2] < rad)
-            )
-            fov_pos = hid_pos[fov_mask]
-        else:
-            fov_pos = hid_pos
-
-        halo_fov_counts[hid] = len(fov_pos)
-        halo_median_pos[hid] = np.median(fov_pos, axis=0) if len(fov_pos) > 0 else None
 
     for proj in projections:
         ax = proj['ax']
         dim1 = proj['dims'][0]
         dim2 = proj['dims'][1]
 
-        if new_mask is not None:
-            # Older particles: semi-transparent
-            old_mask = ~new_mask
-            if np.any(old_mask):
-                ax.scatter(
-                    pos_data[old_mask, dim1],
-                    pos_data[old_mask, dim2],
-                    c=particle_colors_arr[old_mask],
-                    s=25.0,
-                    alpha=0.25,
-                    zorder=3,
-                    edgecolors='none'
-                )
-            # Newly formed particles: fully opaque
-            if np.any(new_mask):
-                ax.scatter(
-                    pos_data[new_mask, dim1],
-                    pos_data[new_mask, dim2],
-                    c=particle_colors_arr[new_mask],
-                    s=25.0,
-                    zorder=4,
-                    alpha=0.25, # can set to 1 to make it stand out more, but may be too bright if many new stars
-                    edgecolors='none'
-                )
-        else:
-            ax.scatter(
-                pos_data[:, dim1],
-                pos_data[:, dim2],
-                c=particle_colors,
-                zorder=3,
-                s=25.0,  # Marker size
-                alpha=0.25,  # Use transparency to see overlapping structures
-                edgecolors='none'  # Remove marker edges for a cleaner look
-            )
+        ax.scatter(
+            pos_data[:, dim1], 
+            pos_data[:, dim2],
+            c=particle_colors,
+            s=25.0,  # Marker size
+            alpha=0.25, # Use transparency to see overlapping structures
+            edgecolors='none' # Remove marker edges for a cleaner look
+        )
 
         ax.set_title(proj['title'], fontsize=14)
         ax.set_xlabel(proj['labels'][0], fontsize=12)
@@ -193,39 +122,10 @@ def plot_halo_mergers(sp, mask, haloids, color_map, timestep, rad=None, savepath
             ax.set_xlim(-rad, rad)
             ax.set_ylim(-rad, rad)
 
-        # Overlay median position marker and label for each halo
-        for hid in unique_hids:
-            med = halo_median_pos[hid]
-            if med is None:
-                continue
-            mx = med[dim1]
-            my = med[dim2]
-            ax.scatter(
-                mx, my,
-                marker='x',
-                color=color_map[hid],
-                s=200,
-                linewidths=2.5,
-                zorder=5
-            )
-            ax.text(
-                mx, my, f' {hid}',
-                color='black',
-                fontsize=12,
-                va='bottom',
-                zorder=6
-            )
-
-    # Display the legend — include FOV particle count in each label
-    legend_patches = [
-        mpatches.Patch(
-            color=color_map[hid],
-            label=f'{hid} (N={halo_fov_counts.get(hid, 0)})'
-        )
-        for hid in unique_hids
-    ]
-    if len(legend_patches) <= 60:
-        axes[0].legend(handles=legend_patches, title="Original Halo ID", loc='upper right', fontsize=12)
+    # Display the legend
+    legend_patches = [mpatches.Patch(color=color_map[hid], label=hid) for hid in np.unique(haloids)]
+    if len(legend_patches) <= 40:
+        axes[0].legend(handles=legend_patches, title="Original Halo ID", loc='upper right', fontsize=8)
     else:
         tqdm.tqdm.write(f"Warning: {len(legend_patches)} unique halos found. Legend will not be displayed to avoid clutter.")
 
@@ -280,15 +180,9 @@ def setup_paths(simname):
     """
     #! Configure paths as needed
     if 'emu' in hostname:
-        # simpath = '/home/ns1917/Sims/romulus_zooms/'
-        # outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
-        # annafile_dir = "/home/christenc/Code/Datafiles/stellar_halos/"
-
-        simpath = '/data/REPOSITORY/romulus_zooms/'
-        outfile_dir = "/home/christenc/Code/Datafiles/stellar_halos_plots/"
-        annafile_dir = "/home/christenc/Code/Datafiles/stellar_halos/"
-
-        
+        simpath = '/home/ns1917/Sims/romulus_zooms/'
+        outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
+        annafile_dir = '/home/ns1917/pynbody/stellarhalo_trace_aw/updated_ids'
     else:
         simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
         outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
@@ -315,7 +209,6 @@ def load_halo_data(annafile_dir, simname):
         list: List of particle IDs
     """
     #! Configure paths 
-    print("Halo file: ",annafile_dir+'/'+simname+'/'+simname+'_allhalostardata_consolidated2.h5')
     with h5py.File(annafile_dir+'/'+simname+'/'+simname+'_allhalostardata_consolidated2.h5','r') as f:
         hostids = f['host_IDs'].asstr()[:]  # unique host IDs
         partids = f['particle_IDs'][:]  # iords
@@ -324,7 +217,6 @@ def load_halo_data(annafile_dir, simname):
         pp = f['particle_positions'][:]  # position at formation time
         tsloc = f['timestep_location'][:]  # snapshot where star particle first appears
         
-    print("Unique halo ids: ", np.unique(hostids))
     halo_particle_dict = {}  # map iords to their unique host IDs
     for i, part in enumerate(partids):
         halo_particle_dict[part] = hostids[i]
@@ -372,17 +264,15 @@ def initialize_simulation_data(simname):
     all_timesteps = db.get_simulation(ss_dir).timesteps
     for timestep in all_timesteps:
         halo2 = timestep.halos.all()[1]
-        """
         try:
             halo2['shrink_center']
         except:
             tqdm.tqdm.write(timestep.extension[-6:])  # Log timesteps without shrink_center
-        """
-        
+    
     return (simpath, outfile_dir, annafile_dir, basename, ss_dir, sim_base, ss_z0,
             halo_particle_dict, all_timesteps, halos_stars_dict, hostids, partids)
 
-def main(simname, overwrite=True, create_animation=True, timesteps=None):
+def main(simname, overwrite=False, create_animation=False):
     """Generate merger history plots for a Romulus zoom simulation.
     
     Args:
@@ -395,28 +285,14 @@ def main(simname, overwrite=True, create_animation=True, timesteps=None):
     
     uIDs = np.unique(hostids)
 
-    # Get the main halo (first halo with stars at z=0) from tangos database
+    # Get the main halo (first halo with stars at z=0)
     halo = halos_stars_dict[all_timesteps[-1].extension[-6:]][0]
-    print(f"Main halo: {halo.halo_number}")
-
-    # Or get the main halo by finding the most massive one in the halo trace file
-    use_halo_trace = False
-
-    trace = pd.read_hdf(sim_base + basename + '.' + '004096' +'/'+ basename + '.004096.trace_back.hdf5')
-    #halo_id = trace.index.values.tolist()[0] # I think this line won't work because halo should be a dictionary
     tqdm.tqdm.write(f"Starting processing for simulation: {simname}, halo: {halo.halo_number} with {halo.NStar} star particles")
-    if use_halo_trace:
-        snapshots = trace.keys().tolist()
-        snapshots.insert(0, '004096')  # Ensure the z=0 snapshot is included at the start of the list
-        dbids = trace.iloc[0].values.tolist() # Will only work if looking for the most massive halo in the volume
-        dbids.insert(0, halo.halo_number)  # Ensure the z=0 halo's dbid is included at the start of the list
-    else:
-        # Build merger tree: map each snapshot to the main halo's progenitor in that snapshot
-        halo_numbers, dbids = halo.calculate_for_progenitors("halo_number()", "dbid()")
-        snapshots = [db.get_halo(dbid).timestep.extension[-6:] for dbid in dbids]
 
+    # Build merger tree: map each snapshot to the main halo's progenitor in that snapshot
+    halo_numbers, dbids = halo.calculate_for_progenitors("halo_number()", "dbid()")
+    snapshots = [db.get_halo(dbid).timestep.extension[-6:] for dbid in dbids]
     halo_snapshots_dict = {snapshot: dbid for snapshot, dbid in zip(snapshots, dbids)}
-    #print(f"Main halo progenitors across snapshots: {halo_snapshots_dict}")
 
     # Configure output directories for plots at different zoom levels
     save_bases = [os.path.join(outfile_dir, 'merge_plots', ss_dir+str(halo.halo_number)),
@@ -430,44 +306,21 @@ def main(simname, overwrite=True, create_animation=True, timesteps=None):
             os.makedirs(save_base)
     filename_base = ss_dir + '_' + str(halo.halo_number) + '_'
 
-    # Filter to requested timesteps if provided
-    if timesteps is not None:
-        timestep_set = set(timesteps)
-        filtered_timesteps = [ts for ts in all_timesteps if ts.extension[-6:] in timestep_set]
-    else:
-        filtered_timesteps = all_timesteps
-
+    # Track unique halo IDs that appear in the field of view across all snapshots
+    unique_haloids_in_fov = set()
+    
     # Loop through all timesteps for this halo (in reverse chronological order)
-    ts_list = filtered_timesteps[::-1]  # latest snapshot first
-    pbar = tqdm.tqdm(total=len(ts_list), desc=f"Processing {simname} snapshots")
-    for i, ts_obj in enumerate(ts_list):
-        timestep = ts_obj.extension[-6:]
-
-        # Scale factor of the chronologically previous snapshot (one step earlier in time,
-        # i.e., the next entry in ts_list since ts_list goes latest→earliest).
-        # Used to highlight star particles that formed since that snapshot.
-        if i + 1 < len(ts_list):
-            prev_snap_a = 1.0 / (1.0 + ts_list[i + 1].redshift)
-        else:
-            prev_snap_a = None  # earliest snapshot has no predecessor
+    pbar = tqdm.tqdm(total=len(all_timesteps), desc=f"Processing {simname} snapshots")
+    for i, timestep in enumerate(all_timesteps[::-1]):
+        timestep = timestep.extension[-6:]
 
         # Get simulation and halo
         s = pynbody.load(sim_base + basename + '.' + timestep +'/'+ basename + '.' + timestep)
         s.physical_units()
         
         # Get the main halo's progenitor at this snapshot
+        halo = db.get_halo(halo_snapshots_dict[timestep])
         tqdm.tqdm.write(f"Now on {timestep}")
-        # Uses the Tangos merger tree to find the main progenitor halo in this snapshot, then retrieves it with get_halo
-        main_prog = halo_snapshots_dict[timestep]
-        print(f"Tangos Main progenitor halo dbid for snapshot {timestep}: {main_prog}, halo number: {db.get_halo(main_prog).halo_number}")
-
-        # Uses Elaad's halo trace code instad of the tangos database
-        # If not the first timestep
-        if False and (halo_snapshots_dict['004096'] in trace.index.values.tolist()):
-            # Uses Elaads main-progenitor trace code
-            main_prog = trace.loc[halo.halo_number, timestep]
-            print(f"Elaad's Main progenitor halo dbid for snapshot {timestep}: {main_prog}")
-        halo = db.get_halo(main_prog)
 
         # Define output paths for the three zoom levels
         save_path = os.path.join(save_bases[0], filename_base + timestep + '.png')
@@ -488,18 +341,11 @@ def main(simname, overwrite=True, create_animation=True, timesteps=None):
             except:
                 rad = halo['max_radius']  # Fallback to max radius
 
-            sphere_rad = max(rad, 200)  # Ensure a minimum radius for early snapshots with small halos
-
         # Skip if files exist and overwrite is False
-        """
         if not overwrite and (os.path.isfile(save_path) and os.path.isfile(save_path2) and os.path.isfile(save_path3)):
             tqdm.tqdm.write(f"File {save_path} already exists, skipping...")
             pbar.update(1)
             continue
-        """
-        # Map each star to its original host halo ID (where it formed)
-        mask_s = s.s['tform'] > 0  # Exclude wind particles: FROM ANNA'S CODE
-        haloids_s = np.array([halo_particle_dict[part] for part in s.s['iord'][mask_s]])  # Only consider star particles (tform > 0)
 
         # Center on halo
         try:
@@ -518,17 +364,6 @@ def main(simname, overwrite=True, create_animation=True, timesteps=None):
                 pbar.update(1)
                 continue
 
-        # Center: use mean position of main halo (4096_1) particles if present,
-        # otherwise fall back to roughcen from tangos/pynbody
-        main_mask = haloids_s == '4096_1'
-        if np.any(main_mask):
-            actual_cen = np.average(s.s['pos'][mask_s][main_mask], axis=0, weights=s.s['mass'][mask_s][main_mask])
-            tqdm.tqdm.write(f"Centering on mean of {np.sum(main_mask)} 4096_1 particles")
-            tqdm.tqdm.write(f'Calculated average center: {actual_cen}')
-        else:
-            actual_cen = roughcen
-            tqdm.tqdm.write(f"No 4096_1 particles found, using roughcen")
-
         # Radius for adaptive zoom plots
         try:
             currad = halo['Rvir']
@@ -537,37 +372,40 @@ def main(simname, overwrite=True, create_animation=True, timesteps=None):
 
         # Filter snapshot by only particles within the reference radius, then center on halo
         try:
-            sp = s[pynbody.filt.Sphere(SimArray([sphere_rad], "kpc"), actual_cen)].load_copy()
+            sp = s[pynbody.filt.Sphere(SimArray([rad], "kpc"), roughcen)].load_copy()
             sp.physical_units()
+            sp['pos'] -= roughcen  # Shift coordinates so halo is at origin
             tqdm.tqdm.write(f"Num stars: {len(sp.s)}", end=', ')  # Total num of stars in sphere
-
-            # Recenter the snapshot on actual_cen
-            sp['pos'] -= actual_cen
 
             # Filter stars: exclude wind particles (negative formation times)
             # mask = np.where(sp.s['amiga.grp'] == halo.halo_number)[0]  # Alternative: filter by halo membership
             # mask = np.where(sp.s['amiga.grp'] == sp.s['amiga.grp'])[0]  # Alternative: dummy mask (all particles)
             mask = sp.s['tform'] > 0  # Exclude wind particles: FROM ANNA'S CODE
+            
+            # Map each star to its original host halo ID (where it formed)
+            haloids = np.array([halo_particle_dict[part] for part in sp.s['iord'][mask]])
             tqdm.tqdm.write(f"Masked num stars: {len(sp.s[mask])}")
-
-            haloids = np.array([halo_particle_dict[part] for part in sp.s['iord'][mask]])  # Only consider star particles (tform > 0)
-
-            # Extract formation times for masked star particles (used to highlight newly formed stars)
-            tform_arr = np.array(sp.s['tform'][mask])
+            
+            # Track unique halo IDs in the field of view
+            unique_haloids_in_fov.update(np.unique(haloids))
 
             # Generate plots at three zoom levels
-            plot_halo_mergers(sp, mask, haloids, colormap, timestep, rad/np.sqrt(2), save_path,
-                              tform_arr=tform_arr, prev_snap_a=prev_snap_a)  # Standard: scaled to z=0 Rvir
-            plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad, save_path2,
-                              tform_arr=tform_arr, prev_snap_a=prev_snap_a)  # Zoom: current snapshot Rvir
-            plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad/(np.sqrt(2)*4), save_path3,
-                              tform_arr=tform_arr, prev_snap_a=prev_snap_a)  # More zoomed: 4x closer
+            plot_halo_mergers(sp, mask, haloids, colormap, timestep, rad/np.sqrt(2), save_path)  # Standard: scaled to z=0 Rvir
+            plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad, save_path2)  # Zoom: current snapshot Rvir
+            plot_halo_mergers(sp, mask, haloids, colormap, timestep, currad/(np.sqrt(2)*4), save_path3)  # More zoomed: 4x closer
             pbar.update(1)
         except Exception as e:
             tqdm.tqdm.write(f"\nERROR processing timestep {timestep}: {str(e)}")
             tqdm.tqdm.write(f"Terminating processing loop.")
             pbar.close()
-            continue
+            break
+    
+    # Save unique halo IDs to text file
+    haloid_file = os.path.join(outfile_dir, f"{ss_dir}_{halo.halo_number}_unique_haloids.txt")
+    with open(haloid_file, 'w') as f:
+        sorted_haloids = sorted(unique_haloids_in_fov)
+        f.write(' '.join(sorted_haloids))
+    tqdm.tqdm.write(f"Saved {len(unique_haloids_in_fov)} unique halo IDs to {haloid_file}")
 
     if create_animation:
         zoom_suffixes = ['', '_zoom', '_morezoom']
@@ -588,13 +426,13 @@ if __name__ == "__main__":
         epilog="""
 Examples:
   # Plot merger history for r442 simulation
-  python plothalomergersMM.py r442
+  python plothalomergersMM.py --name r442
   
   # Plot r329 simulation with overwrite enabled
-  python plothalomergersMM.py r329 --overwrite
+  python plothalomergersMM.py -n r329 --overwrite
   
   # Plot r377 simulation (short form)
-  python plothalomergersMM.py r377
+  python plothalomergersMM.py -n r377
   
   # Show help
   python plothalomergersMM.py --help
@@ -633,25 +471,16 @@ Note:
         action='store_true',
         help="Create animations from the generated plots (default: False)"
     )
-    parser.add_argument(
-        '-t', '--timesteps',
-        nargs='+',
-        default=None,
-        metavar='TIMESTEP',
-        help="One or more snapshot timestep extensions to process (e.g., 004096 003072). "
-             "If omitted, all timesteps are processed."
-    )
     args = parser.parse_args()
     
     overwrite = args.overwrite
     create_animation = args.create_animation
-    timesteps = args.timesteps
     
     # Process single or multiple simulations
     if len(args.simnames) == 1:
         tqdm.tqdm.write(f"Processing simulation: {args.simnames[0]}")
-        main(args.simnames[0], overwrite, create_animation, timesteps)
+        main(args.simnames[0], overwrite, create_animation)
     else:
         for simname in args.simnames:
             tqdm.tqdm.write(f"Processing simulation: {simname}")
-            main(simname, overwrite, create_animation, timesteps)
+            main(simname, overwrite, create_animation)

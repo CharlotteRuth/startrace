@@ -58,7 +58,7 @@ if 'emu' in hostname:
 
     simpath = '/data/REPOSITORY/romulus_zooms/'
     os.environ['TANGOS_SIMULATION_FOLDER'] = simpath
-    db.core.init_db('/home/ns1917/Databases/Marvel_BN_N10.db') #simpath + '/rom25_dwarf_zooms.db')
+    db.core.init_db(simpath + '/rom25_dwarf_zooms.db')
 
 else:  # Grinnell system paths
     os.environ['TANGOS_SIMULATION_FOLDER'] = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
@@ -112,8 +112,8 @@ def setup_paths_and_data(simname, main_halo_num):
         simpath = '/home/ns1917/tangos_sims/'
         outfile_dir = "/home/ns1917/pynbody/stellarhalo_trace_aw/"
 
-        #simpath = '/data/REPOSITORY/romulus_zooms/'
-        #outfile_dir = "/home/christenc/Code/Datafiles/stellar_halos_bf/"
+        simpath = '/data/REPOSITORY/romulus_zooms/'
+        outfile_dir = "/home/christenc/Code/Datafiles/stellar_halos_bf/"
     else:
         simpath = '/home/selvani/MAP/Sims/cptmarvel.cosmo25cmb/cptmarvel.cosmo25cmb.4096g5HbwK1BH/'
         outfile_dir = "/home/selvani/MAP/pynbody/stellarhalo_trace_aw/"
@@ -144,7 +144,6 @@ def setup_paths_and_data(simname, main_halo_num):
 
     # Load z=0 snapshot to get main halo information
     s = pynbody.load(ss_z0)
-    print(f"Loaded z=0 snapshot: {ss_z0}")
     h = s.halos(halo_numbers='v1')
     
     # Get the main halo we're tracking mergers into
@@ -168,7 +167,6 @@ def setup_paths_and_data(simname, main_halo_num):
     
     return (simpath, outfile_dir, basename, ss_dir, sim_base, ss_z0, 
             halo_particle_dict, main_halo, halo_snapshots_dict, hostids, partids, pct)
-
 
 def main(idx, simname, main_halo_num):
     """Process a specific merger event and save particle evolution data.
@@ -225,6 +223,23 @@ def main(idx, simname, main_halo_num):
     
     print(f"Tracking {num_star_particles} star particles and {num_dm_particles} DM particles across {num_snaps} snapshots")
 
+    # Initialize arrays to store particle data across all snapshots
+    # Use np.nan to fill arrays - this makes it clear if a particle was not present in a snapshot
+    # (e.g., stars before they formed, or particles that left the volume)
+    
+    # Star particle arrays - indexed by [snapshot, particle_index, (x/y/z)]
+    star_iords = np.full((num_snaps, num_star_particles), np.nan)
+    star_pos = np.full((num_snaps, num_star_particles, 3), np.nan)  # 3D positions
+    star_vel = np.full((num_snaps, num_star_particles, 3), np.nan)  # 3D velocities
+    star_mass = np.full((num_snaps, num_star_particles), np.nan)
+    star_age = np.full((num_snaps, num_star_particles), np.nan)
+    star_feh = np.full((num_snaps, num_star_particles), np.nan)  # Using Fe/H as a single metallicity value
+
+    # Dark matter particle arrays
+    dm_pos = np.full((num_snaps, num_dm_particles, 3), np.nan)
+    dm_vel = np.full((num_snaps, num_dm_particles, 3), np.nan)
+    dm_mass = np.full((num_snaps, num_dm_particles), np.nan)
+
     # Snapshot metadata
     zs = np.zeros(num_snaps)  # Redshifts
     snaps = [ts.extension for ts in timesteps_to_process]  # Snapshot identifiers
@@ -238,142 +253,99 @@ def main(idx, simname, main_halo_num):
     star_iord_map = {iord: k for k, iord in enumerate(all_star_iords)}
     dm_iord_map = {iord: k for k, iord in enumerate(all_dm_iords)}
 
-    # --- Construct output path and create HDF5 file before the snapshot loop ---
+    # Track previous timestep to filter for newly formed stars
+    prev_time = 0
+    
+    # Loop through all snapshots and extract particle data
+    for i, tstep in enumerate(tqdm.tqdm(timesteps_to_process, desc=f"Processing {simname} snapshots")):
+        # Load the snapshot and convert to physical units
+        s = pynbody.load(tstep.filename)
+        s.physical_units()
+        h = s.halos(halo_numbers='v1')  # Load halo catalog
+        
+        # Get the main halo's progenitor at this snapshot
+        halo = db.get_halo(halo_snapshots_dict[tstep.extension[-6:]])
+        print(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
+        
+        # Store redshift for this snapshot
+        zs[i] = s.properties['z']
+
+        # Center the whole simulation on the main halo progenitor
+        pynbody.analysis.halo.center(h[halo.halo_number], vel=True)
+        print(f"Centered on halo: {halo.halo_number}")
+
+        # --- Process Star Particles ---
+        # Only include stars that have formed by this time (tform > prev_time)
+        stars_present_mask = pynbody.filt.HighPass('tform', prev_time)
+        # Filter for only the star particles we're tracking
+        subs = s.s[stars_present_mask and np.isin(s.s['iord'], all_star_iords)]
+
+        # Get particle IDs present in this snapshot
+        iords_in_subs = np.array(subs['iord'])
+        # Map particle IDs to their storage array indices
+        k_indices_star = np.array([star_iord_map[iord] for iord in iords_in_subs])
+
+        # Store star particle data for this snapshot
+        if len(k_indices_star) > 0:
+            star_pos[i, k_indices_star, :] = subs['pos']  # Positions (kpc)
+            star_vel[i, k_indices_star, :] = subs['vel']  # Velocities (km/s)
+            star_mass[i, k_indices_star] = subs['mass']  # Masses (solar masses)
+            star_age[i, k_indices_star] = subs['age']  # Ages (Gyr)
+            star_feh[i, k_indices_star] = subs['feh']  # Iron abundance [Fe/H]
+        print(f"Processed {len(k_indices_star)} star particles in snapshot {tstep.extension[-6:]}")
+
+        # --- Process Dark Matter Particles ---
+        # Filter for only the DM particles we're tracking
+        subd = s.dm[np.isin(s.dm['iord'], all_dm_iords)]
+        iords_in_subd = np.array(subd['iord'])
+        # Map particle IDs to their storage array indices
+        k_indices_dm = np.array([dm_iord_map[iord] for iord in iords_in_subd])
+        
+        # Store DM particle data for this snapshot
+        if len(k_indices_dm) > 0:
+            dm_pos[i, k_indices_dm, :] = subd['pos']  # Positions (kpc)
+            dm_vel[i, k_indices_dm, :] = subd['vel']  # Velocities (km/s)
+            dm_mass[i, k_indices_dm] = subd['mass']  # Masses (solar masses)
+        print(f"Processed {len(k_indices_dm)} DM particles in snapshot {tstep.extension[-6:]}")
+        
+        # Update time tracker for next iteration
+        prev_time = tstep.time_gyr
+
+    # --- Save Data to HDF5 File ---
+    # Construct output path: organized by simulation name and main halo number
     output_filename = os.path.join(
-        outfile_dir, 'uw_boundfrac', simname, str(main_halo.halo_number),
+        outfile_dir, 'uw_boundfrac', simname, str(main_halo.halo_number), 
         f"{ss_dir}_{main_halo.halo_number}_{idx}_particle_data.h5"
     )
-
+    
     # Create output directory if it doesn't exist
     if not os.path.exists(os.path.dirname(output_filename)):
         os.makedirs(os.path.dirname(output_filename))
     print(f"Saving data to {output_filename}")
 
+    # Write all data to HDF5 file
     with h5py.File(output_filename, 'w') as f:
-
-        # --- Create resizable, chunked datasets ---
-        # Chunk shape is one snapshot slice at a time along axis 0
-
-        # Star particle datasets
-        f.create_dataset('star_iords', data=all_star_iords)  # Particle IDs (static)
-        f.create_dataset('star_pos',
-            shape=(0, num_star_particles, 3), maxshape=(None, num_star_particles, 3),
-            dtype=np.float64, chunks=(1, num_star_particles, 3), fillvalue=np.nan)
-        f.create_dataset('star_vel',
-            shape=(0, num_star_particles, 3), maxshape=(None, num_star_particles, 3),
-            dtype=np.float64, chunks=(1, num_star_particles, 3), fillvalue=np.nan)
-        f.create_dataset('star_mass',
-            shape=(0, num_star_particles), maxshape=(None, num_star_particles),
-            dtype=np.float64, chunks=(1, num_star_particles), fillvalue=np.nan)
-        f.create_dataset('star_age',
-            shape=(0, num_star_particles), maxshape=(None, num_star_particles),
-            dtype=np.float64, chunks=(1, num_star_particles), fillvalue=np.nan)
-        f.create_dataset('star_feh',
-            shape=(0, num_star_particles), maxshape=(None, num_star_particles),
-            dtype=np.float64, chunks=(1, num_star_particles), fillvalue=np.nan)
-
-        # Dark matter particle datasets
-        f.create_dataset('dm_iords', data=all_dm_iords)  # Particle IDs (static)
-        f.create_dataset('dm_pos',
-            shape=(0, num_dm_particles, 3), maxshape=(None, num_dm_particles, 3),
-            dtype=np.float64, chunks=(1, num_dm_particles, 3), fillvalue=np.nan)
-        f.create_dataset('dm_vel',
-            shape=(0, num_dm_particles, 3), maxshape=(None, num_dm_particles, 3),
-            dtype=np.float64, chunks=(1, num_dm_particles, 3), fillvalue=np.nan)
-        f.create_dataset('dm_mass',
-            shape=(0, num_dm_particles), maxshape=(None, num_dm_particles),
-            dtype=np.float64, chunks=(1, num_dm_particles), fillvalue=np.nan)
-
-        # Track previous timestep to filter for newly formed stars
-        prev_time = 0
-
-        # Loop through all snapshots and extract particle data
-        for i, tstep in enumerate(tqdm.tqdm(timesteps_to_process, desc=f"Processing {simname} snapshots")):
-            # Load the snapshot and convert to physical units
-            s = pynbody.load(tstep.filename)
-            s.physical_units()
-            h = s.halos(halo_numbers='v1')  # Load halo catalog
-
-            # Get the main halo's progenitor at this snapshot
-            halo = db.get_halo(halo_snapshots_dict[tstep.extension[-6:]])
-            print(f"Loaded snapshot: {tstep.extension[-6:]}, ", end='')
-
-            # Store redshift for this snapshot
-            zs[i] = s.properties['z']
-
-            # Center the whole simulation on the main halo progenitor
-            pynbody.analysis.halo.center(h[halo.halo_number], vel=True)
-            print(f"Centered on halo: {halo.halo_number}")
-
-            # --- Process Star Particles ---
-            # Allocate a single-snapshot temporary array filled with NaN
-            snap_star_pos  = np.full((num_star_particles, 3), np.nan)
-            snap_star_vel  = np.full((num_star_particles, 3), np.nan)
-            snap_star_mass = np.full((num_star_particles,),  np.nan)
-            snap_star_age  = np.full((num_star_particles,),  np.nan)
-            snap_star_feh  = np.full((num_star_particles,),  np.nan)
-
-            # Only include stars that have formed by this time (tform > prev_time)
-            stars_present_mask = pynbody.filt.HighPass('tform', prev_time)
-            # Filter for only the star particles we're tracking
-            subs = s.s[stars_present_mask and np.isin(s.s['iord'], all_star_iords)]
-
-            # Get particle IDs present in this snapshot
-            iords_in_subs = np.array(subs['iord'])
-            # Map particle IDs to their storage array indices
-            k_indices_star = np.array([star_iord_map[iord] for iord in iords_in_subs])
-
-            # Populate temporary arrays for this snapshot
-            if len(k_indices_star) > 0:
-                snap_star_pos[k_indices_star, :]  = subs['pos']
-                snap_star_vel[k_indices_star, :]  = subs['vel']
-                snap_star_mass[k_indices_star]     = subs['mass']
-                snap_star_age[k_indices_star]      = subs['age']
-                snap_star_feh[k_indices_star]      = subs['feh']
-            print(f"Processed {len(k_indices_star)} star particles in snapshot {tstep.extension[-6:]}")
-
-            # --- Process Dark Matter Particles ---
-            snap_dm_pos  = np.full((num_dm_particles, 3), np.nan)
-            snap_dm_vel  = np.full((num_dm_particles, 3), np.nan)
-            snap_dm_mass = np.full((num_dm_particles,),  np.nan)
-
-            subd = s.dm[np.isin(s.dm['iord'], all_dm_iords)]
-            iords_in_subd = np.array(subd['iord'])
-            k_indices_dm = np.array([dm_iord_map[iord] for iord in iords_in_subd])
-
-            if len(k_indices_dm) > 0:
-                snap_dm_pos[k_indices_dm, :]  = subd['pos']
-                snap_dm_vel[k_indices_dm, :]  = subd['vel']
-                snap_dm_mass[k_indices_dm]     = subd['mass']
-            print(f"Processed {len(k_indices_dm)} DM particles in snapshot {tstep.extension[-6:]}")
-
-            # --- Resize datasets and write this snapshot's data ---
-            for ds_name, data in [
-                ('star_pos',  snap_star_pos[np.newaxis, ...]),
-                ('star_vel',  snap_star_vel[np.newaxis, ...]),
-                ('star_mass', snap_star_mass[np.newaxis, ...]),
-                ('star_age',  snap_star_age[np.newaxis, ...]),
-                ('star_feh',  snap_star_feh[np.newaxis, ...]),
-                ('dm_pos',    snap_dm_pos[np.newaxis, ...]),
-                ('dm_vel',    snap_dm_vel[np.newaxis, ...]),
-                ('dm_mass',   snap_dm_mass[np.newaxis, ...]),
-            ]:
-                f[ds_name].resize(i + 1, axis=0)
-                f[ds_name][i, ...] = data
-
-            # Explicitly release the snapshot from memory before the next iteration
-            del s, h
-
-            # Update time tracker for next iteration
-            prev_time = tstep.time_gyr
-
-        # Write snapshot metadata after the loop (small arrays, fine to write at end)
+        # Snapshot metadata
         f.create_dataset('snaps', data=np.bytes_(snaps))  # Snapshot identifiers
-        f.create_dataset('zs', data=zs)                   # Redshifts
+        f.create_dataset('zs', data=zs)  # Redshifts
+
+        # Star particle data
+        # Shape: (num_particles,) for IDs, (num_snaps, num_particles, 3) for positions/velocities
+        f.create_dataset('star_iords', data=all_star_iords)  # Particle IDs
+        f.create_dataset('star_pos', data=star_pos)  # Positions over time
+        f.create_dataset('star_vel', data=star_vel)  # Velocities over time
+        f.create_dataset('star_mass', data=star_mass)  # Masses over time
+        f.create_dataset('star_age', data=star_age)  # Ages over time
+        f.create_dataset('star_feh', data=star_feh)  # Metallicities over time
+
+        # Dark matter particle data
+        f.create_dataset('dm_iords', data=all_dm_iords)  # Particle IDs
+        f.create_dataset('dm_pos', data=dm_pos)  # Positions over time
+        f.create_dataset('dm_vel', data=dm_vel)  # Velocities over time
+        f.create_dataset('dm_mass', data=dm_mass)  # Masses over time
 
     print("Done.")
     return output_filename
-
 
 def _validate_merger_id(s):
     """Validate merger identifier strings like '0384_47' or '2304_14'.

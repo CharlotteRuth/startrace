@@ -83,7 +83,11 @@ def create_animation_with_padding(input_folder, output_file, fps=6):
 
     # --- Step 2: Create the animation with padded frames ---
     print(f"Creating animation at '{output_file}'...")
-    with imageio.get_writer(output_file, fps=fps) as writer:
+    writer_kwargs = {'fps': fps}
+    if output_file.endswith('.mp4'):
+        writer_kwargs['codec'] = 'mpeg4'
+        writer_kwargs['quality'] = 8
+    with imageio.get_writer(output_file, **writer_kwargs) as writer:
         for filename in tqdm.tqdm(filenames, desc="Processing frames"):
             # Read the original image
             img = imageio.imread(filename)
@@ -127,7 +131,11 @@ def create_animation_simple(input_folder, output_file, fps=12):
     print(f"Found {len(filenames)} images. Creating animation at {output_file}...")
 
     # Create the animation
-    with imageio.get_writer(output_file, fps=fps) as writer:
+    writer_kwargs = {'fps': fps}
+    if output_file.endswith('.mp4'):
+        writer_kwargs['codec'] = 'mpeg4'
+        writer_kwargs['quality'] = 8
+    with imageio.get_writer(output_file, **writer_kwargs) as writer:
         for filename in filenames:
             image = imageio.imread(filename)
             writer.append_data(image)
