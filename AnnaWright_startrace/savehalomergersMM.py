@@ -215,7 +215,7 @@ def main(idx, simname):
 
     # Get dark matter particle IDs from the merger halo at its peak
     sim = pynbody.load(halo_dm_max.timestep.filename)
-    mask = sim.dm['amiga.grp'] == int(halo_dm_max.halo_number)
+    mask = sim.dm['amiga.grp'] == int(halo_dm_max.finder_id)
     all_dm_iords = sim.dm['iord'][mask]
 
     # Get all simulation snapshots to process
